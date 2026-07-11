@@ -1,4 +1,4 @@
-"""LLM evaluation client (was llm.py).
+"""LLM evaluation client.
 
 Primary provider is Anthropic; when it fails AND the OpenAI fallback
 succeeds, the client stays on OpenAI for 30 minutes before retrying the

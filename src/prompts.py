@@ -1,4 +1,4 @@
-"""LLM prompt templates (was trader_config.py, minus the hardcoded keys)."""
+"""LLM prompt templates."""
 
 
 def swap_analysis_prompt(asset_a, asset_b, asset_preferred, analysis):

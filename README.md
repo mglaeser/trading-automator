@@ -4,11 +4,6 @@ Automated crypto portfolio manager driven by TradingView technical analysis
 and LLM evaluation, executing on **Binance** or **eToro** via their official
 APIs, with a built-in **web UI** for configuration and live monitoring.
 
-This is the API-based successor of the earlier Nexo/Selenium automation: all
-browser automation (login flows, captcha solving, DOM scraping, screenshots)
-has been removed and every trading behaviour has been ported to exchange
-REST APIs.
-
 ## How it works
 
 Every cycle (randomised intervals, different for day and night):
@@ -16,8 +11,7 @@ Every cycle (randomised intervals, different for day and night):
 1. **Refresh** — read balances (and outstanding margin loan) from the exchange.
 2. **Rebalance** —
    - split fresh quote-asset inflows (buy a slice of the anchor asset),
-   - keep the *anchor asset* at its target portfolio share
-     (generalisation of the old NEXO 10.3% loyalty level),
+   - keep the *anchor asset* at its target portfolio share,
    - pull TradingView indicators (RSI, MACD, Bollinger, Stochastic,
      Fibonacci, momentum/trend metrics) for the configured asset universe,
    - have an LLM (Anthropic primary, OpenAI fallback) compare every asset
@@ -27,7 +21,7 @@ Every cycle (randomised intervals, different for day and night):
      **bearish** → liquidate all crypto into the quote asset, relax the
      schedule; **neutral** → mostly quote asset plus some anchor.
 3. **Repay** — repay any outstanding Binance cross-margin loan with the
-   quote asset (the old Nexo loan repayment; no-op on eToro).
+   quote asset (no-op on eToro, which has no loan facility).
 4. On demand: **dust sweep** of balances below a threshold.
 
 Safety invariants enforced by the engine:
@@ -49,21 +43,6 @@ Safety invariants enforced by the engine:
 
 Optional SMS alerts (sipgate) fire on executed loan repayments and failed
 rebalance runs — never in dry-run mode.
-
-## Functionality mapping (old → new)
-
-| Old (Nexo + Selenium)             | New (API)                              |
-|-----------------------------------|----------------------------------------|
-| Login / TOTP / captcha solving    | API-key auth (gone entirely)           |
-| Balance table scraping            | `GET /api/v3/account` + prices         |
-| Swap page automation              | Market orders / eToro positions        |
-| NEXO loyalty 10.3% maintenance    | Anchor asset target percent            |
-| EURx inflow split                 | Quote-asset inflow split               |
-| Loan repayment page               | Binance margin repay                   |
-| Screenshots / log tail            | Web dashboard + structured event log   |
-| Day/night randomised scheduler    | Same, runtime-adjustable via sentiment |
-| Claude→OpenAI LLM fallback        | Same, keys configurable in the UI      |
-| DEBUG response cache              | Same (`artifacts/cache`, dry-run only) |
 
 ## Quick start — one-liner podman deployment
 
@@ -152,9 +131,6 @@ container stays down across reboots.
 - No credentials live in the repository. Keys are stored in
   `config/config.json` (gitignored) or supplied via environment variables,
   and are masked in every API response to the browser.
-- If you previously used the Selenium version: the credentials that were in
-  its `.env`/source (exchange login, TOTP secret, LLM keys, SMS token)
-  should be considered exposed — **rotate all of them**.
 - The web UI has no built-in authentication. Bind it to localhost or put it
   behind a reverse proxy with auth before exposing it.
 

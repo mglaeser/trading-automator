@@ -1,7 +1,7 @@
 """Shared runtime state observed by the web UI.
 
-Replaces the old screenshots/log-tail workflow with a structured, thread-safe
-event log plus the latest snapshot of everything the dashboard shows.
+A structured, thread-safe event log plus the latest snapshot of everything
+the dashboard shows.
 """
 
 import threading

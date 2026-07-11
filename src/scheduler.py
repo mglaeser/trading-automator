@@ -1,10 +1,9 @@
-"""Randomised day/night scheduler (was scheduler.py + parts of utils.py).
+"""Randomised day/night scheduler.
 
 Each job runs at a random interval inside a [min, max] minute window. Base
 windows come live from settings (so UI edits apply at each job's next
 scheduling), differ between day and night, and can be overridden at runtime
-by the engine's market-sentiment logic -- exactly like the old
-implementation tightened/relaxed the cadence.
+by the engine's market-sentiment logic to tighten or relax the cadence.
 
 Day/night is derived from sunrise and sunset at the configured location
 (astral). Start/stop is race-free: each loop owns its stop event, so a stale

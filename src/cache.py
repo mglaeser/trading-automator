@@ -1,4 +1,4 @@
-"""Response cache for expensive external calls (was responseIO).
+"""Response cache for expensive external calls.
 
 When enabled (dry-run mode), analysis and LLM responses are cached to JSON
 files so repeated development runs do not burn API quota. Entries expire

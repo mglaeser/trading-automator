@@ -82,20 +82,20 @@ DEFAULTS = {
     },
     "trading": {
         # Quote/stable asset used as the intermediate for all swaps and as the
-        # "cash" position (was USDT on Nexo).
+        # "cash" position.
         "quote_asset": "USDT",
-        # Anchor asset target: generalisation of the old NEXO loyalty level --
-        # keep this asset at a fixed share of the portfolio. Adjustments are
-        # clamped to [anchor_swap_min, anchor_swap_max] per cycle, so large
-        # deviations converge incrementally instead of moving big amounts.
+        # Anchor asset target: keep this asset at a fixed share of the
+        # portfolio. Adjustments are clamped to [anchor_swap_min,
+        # anchor_swap_max] per cycle, so large deviations converge
+        # incrementally instead of moving big amounts.
         "anchor_asset": "BNB",
         "anchor_target_percent": 10.3,
         "anchor_swap_min": 2.5,
         "anchor_swap_max": 15.0,
-        # Fiat-inflow split (was handle_euro_balance): when the quote balance
-        # GREW by an amount inside this window since the end of the previous
-        # rebalance cycle, a slice of the inflow buys the anchor asset. Only
-        # the delta counts -- a standing cash reserve never triggers it.
+        # Fiat-inflow split: when the quote balance GREW by an amount inside
+        # this window since the end of the previous rebalance cycle, a slice
+        # of the inflow buys the anchor asset. Only the delta counts -- a
+        # standing cash reserve never triggers it.
         "inflow_min": 300.0,
         "inflow_max": 750.0,
         "inflow_anchor_ratio": 0.103,
@@ -107,7 +107,7 @@ DEFAULTS = {
         "analysis_interval": "30m",
         # How long cached TA/LLM responses stay valid in dry-run (seconds).
         "cache_max_age": 1800,
-        # Universe of tradeable assets (mirrors the old crypto_dict).
+        # Universe of tradeable assets.
         # "symbol"/"screener_exchange" feed TradingView TA; "crypto" marks
         # assets that get sold in a bearish market; "preferred" biases the
         # pairwise LLM comparison. Assets NOT listed here are never touched.

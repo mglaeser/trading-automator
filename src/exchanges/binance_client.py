@@ -9,7 +9,7 @@ Endpoints used:
   GET  /api/v3/exchangeInfo         symbols + lot-size/notional filters
   POST /api/v3/order                market orders (swaps)
   GET  /sapi/v1/margin/account      outstanding margin loans
-  POST /sapi/v1/margin/borrow-repay loan repayment (was the Nexo "repay")
+  POST /sapi/v1/margin/borrow-repay margin loan repayment
 
 Safety properties:
   - LOT_SIZE quantities are quantised with Decimal arithmetic (never
@@ -269,7 +269,7 @@ class BinanceClient(ExchangeClient):
         return SwapResult(from_asset, to_asset, amount, quote_value,
                           self.dry_run, orders)
 
-    # -- margin loan (replaces the Nexo loan repayment) ----------------------
+    # -- margin loan ---------------------------------------------------------
 
     def get_loan_balance(self):
         try:

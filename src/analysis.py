@@ -1,8 +1,8 @@
-"""Technical analysis via TradingView (was crypto_exchnage.py).
+"""Technical analysis via TradingView.
 
-Fetches indicators for every configured asset, derives the same refined
-metrics as before (momentum, volatility, trend strength, Fibonacci levels)
-and a simple rule-based recommendation that feeds the LLM evaluation.
+Fetches indicators for every configured asset, derives refined metrics
+(momentum, volatility, trend strength, Fibonacci levels) and a simple
+rule-based recommendation that feeds the LLM evaluation.
 """
 
 import logging

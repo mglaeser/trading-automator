@@ -1,18 +1,9 @@
 """Trading engine: all portfolio handlers plus orchestration.
 
-Ports every behaviour of the old Selenium implementation onto the exchange
-API layer:
-
-  old (Nexo/Selenium)             ->  new (Binance / eToro API)
-  ------------------------------------------------------------------
-  refresh / extract balances      ->  refresh()
-  handle_nexo_loyalty (10.3%)     ->  maintain_anchor_target()
-  handle_euro_balance             ->  handle_inflow_split()
-  handle_repay_loan               ->  repay() (Binance margin)
-  handle_wallet_distribution      ->  rebalance() (TA + LLM pipeline)
-  handle_swap_to_percent          ->  swap_to_target()
-  handle_sell_all_crypto          ->  sell_all_crypto()
-  handle_small_balances           ->  sweep_small_balances()
+Each scheduled cycle the engine reads balances, keeps the anchor asset at
+its target share, splits fresh quote-asset inflows, repays outstanding
+margin loans, and rebalances the portfolio from a TradingView + LLM
+pipeline. A dust sweep is available on demand.
 
 Safety invariants:
   - Only assets in the configured universe are ever bought or sold; an
@@ -50,11 +41,11 @@ def round_down(number, decimals=2):
 def asset_distribution_from_recommendation(recommendations, allocated_percentage=0.0):
     """Convert pairwise LLM recommendations into portfolio weights.
 
-    Identical scoring to the old implementation: sell_buy shifts one point of
-    confidence from the first to the second asset; buy/sell add/subtract for
-    both; hold is neutral. Negative scores clamp to zero and the rest is
-    normalised into (1 - allocated_percentage). May legitimately return
-    all-zero weights (all hold / net negative) -- callers must handle that.
+    Scoring: sell_buy shifts one point of confidence from the first to the
+    second asset; buy/sell add/subtract for both; hold is neutral. Negative
+    scores clamp to zero and the rest is normalised into
+    (1 - allocated_percentage). May legitimately return all-zero weights
+    (all hold / net negative) -- callers must handle that.
     """
     if not 0 <= allocated_percentage < 1:
         raise ValueError("allocated_percentage must be between 0 and 1")
@@ -186,7 +177,7 @@ class TradingEngine:
         )
         return balances
 
-    # -- anchor asset target (was NEXO loyalty level) ------------------------------
+    # -- anchor asset target ---------------------------------------------------------
 
     def maintain_anchor_target(self, client=None, balances=None):
         """Keep the anchor asset at its target portfolio share.
@@ -246,16 +237,15 @@ class TradingEngine:
             self._swap(client, quote, anchor, amount_quote)
         return True
 
-    # -- fiat inflow split (was handle_euro_balance) ---------------------------------
+    # -- fiat inflow split -----------------------------------------------------------
 
     def handle_inflow_split(self, client=None, balances=None):
         """Buy a slice of the anchor asset from a fresh quote-asset deposit.
 
         Only the *increase* of the quote balance since the end of the last
         rebalance cycle counts as an inflow -- the engine's own cash reserve
-        or liquidation proceeds can never trigger this (the legacy version
-        keyed off a separate EUR balance, which only existed after a
-        deposit; here quote cash is also the working reserve).
+        or liquidation proceeds (quote cash is also the working reserve) can
+        never trigger this.
         """
         client = client or self._client()
         balances = balances if balances is not None else client.get_balances()
@@ -283,7 +273,7 @@ class TradingEngine:
             return True
         return False
 
-    # -- loan repayment (was Nexo repay; Binance margin) ------------------------------
+    # -- loan repayment (Binance margin) ---------------------------------------------
 
     def _repay(self):
         client = self._client()
@@ -314,7 +304,7 @@ class TradingEngine:
                 f"{repay_asset} executed, remaining {remaining:.2f}",
             )
 
-    # -- LLM-driven rebalancing (was handle_wallet_distribution) -----------------------
+    # -- LLM-driven rebalancing ------------------------------------------------------
 
     def _sentiment_interval(self, sentiment):
         window = self.settings.get(f"schedule.sentiment_rebalance.{sentiment}")
@@ -414,7 +404,7 @@ class TradingEngine:
         final_quote = self._balance_map(final_balances).get(quote)
         self._last_cycle_quote = final_quote.quote_value if final_quote else 0.0
 
-    # -- rebalance to target weights (was handle_swap_to_percent) ----------------------
+    # -- rebalance to target weights -------------------------------------------------
 
     def swap_to_target(self, client, balances, target_distribution):
         """Move the portfolio towards the target weights.
@@ -485,7 +475,7 @@ class TradingEngine:
                                        "not needed (all targets within threshold)"))
         return swapped
 
-    # -- bearish liquidation (was handle_sell_all_crypto) --------------------------------
+    # -- bearish liquidation ---------------------------------------------------------
 
     def sell_all_crypto(self, client=None, balances=None):
         """Liquidate all *configured* crypto assets into the quote asset.
@@ -514,7 +504,7 @@ class TradingEngine:
             self.state.log("No crypto positions to liquidate")
         return swapped
 
-    # -- dust sweep (was handle_small_balances) --------------------------------------------
+    # -- dust sweep ------------------------------------------------------------------
 
     def _sweep(self):
         client = self._client()
