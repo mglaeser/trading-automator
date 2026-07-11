@@ -4,19 +4,29 @@ Implements the ExchangeClient interface with plain signed REST calls
 (HMAC-SHA256), no heavyweight SDK required.
 
 Endpoints used:
-  GET  /api/v3/account            balances
-  GET  /api/v3/ticker/price       prices (bulk)
-  GET  /api/v3/exchangeInfo       symbols + lot-size filters
-  POST /api/v3/order              market orders (swaps)
-  GET  /sapi/v1/margin/account    outstanding margin loans
-  POST /sapi/v1/margin/repay      loan repayment (was the Nexo "repay")
+  GET  /api/v3/account              balances
+  GET  /api/v3/ticker/price         prices (bulk)
+  GET  /api/v3/exchangeInfo         symbols + lot-size/notional filters
+  POST /api/v3/order                market orders (swaps)
+  GET  /sapi/v1/margin/account      outstanding margin loans
+  POST /sapi/v1/margin/borrow-repay loan repayment (was the Nexo "repay")
+
+Safety properties:
+  - LOT_SIZE quantities are quantised with Decimal arithmetic (never
+    oversells due to float drift).
+  - Every order leg is checked against the pair's minimum notional BEFORE
+    anything is placed, so a two-leg swap can never half-execute on a
+    too-small second leg.
+  - Live sells are clamped to the actual free balance.
+  - Error messages never contain signed request URLs (the HMAC signature
+    and full query stay in debug logs only).
 """
 
 import hashlib
 import hmac
 import logging
-import math
 import time
+from decimal import ROUND_DOWN, Decimal
 from urllib.parse import urlencode
 
 import requests
@@ -26,6 +36,11 @@ from .base import Balance, ExchangeClient, ExchangeError, SwapResult, add_percen
 log = logging.getLogger(__name__)
 
 STABLE_ALIASES = {"USDT", "USDC", "FDUSD", "TUSD", "BUSD"}
+
+
+def _fmt_qty(value):
+    """Format a quantity for the API without scientific notation."""
+    return f"{value:.8f}".rstrip("0").rstrip(".")
 
 
 class BinanceClient(ExchangeClient):
@@ -43,6 +58,7 @@ class BinanceClient(ExchangeClient):
         self._session.headers.update({"X-MBX-APIKEY": api_key})
         self._symbols = None          # cache of exchangeInfo
         self._symbols_fetched = 0.0
+        self._unpriced_warned = set()  # assets we already warned about
 
     # -- low level ---------------------------------------------------------
 
@@ -62,7 +78,13 @@ class BinanceClient(ExchangeClient):
                 method, f"{self.base_url}{path}", params=params, timeout=self.timeout
             )
         except requests.RequestException as exc:
-            raise ExchangeError(f"Binance request failed: {exc}") from exc
+            # Transport exceptions embed the full URL -- for signed requests
+            # that includes the query and its signature. Keep the detail in
+            # debug logs; surface only the sanitised summary.
+            log.debug("Binance transport error on %s %s: %s", method, path, exc)
+            raise ExchangeError(
+                f"Binance {method} {path} failed: {type(exc).__name__}"
+            ) from exc
         if resp.status_code >= 400:
             try:
                 detail = resp.json().get("msg", resp.text)
@@ -84,6 +106,8 @@ class BinanceClient(ExchangeClient):
                 filters = {f["filterType"]: f for f in sym.get("filters", [])}
                 self._symbols[(sym["baseAsset"], sym["quoteAsset"])] = {
                     "symbol": sym["symbol"],
+                    "base": sym["baseAsset"],
+                    "quote": sym["quoteAsset"],
                     "step": float(filters.get("LOT_SIZE", {}).get("stepSize", 0) or 0),
                     "min_notional": float(
                         filters.get("NOTIONAL", {}).get("minNotional", 0)
@@ -99,12 +123,28 @@ class BinanceClient(ExchangeClient):
 
     @staticmethod
     def _round_step(quantity, step):
+        """Quantise down to the pair's LOT_SIZE step (Decimal: exact)."""
         if not step:
             return quantity
-        precision = max(0, int(round(-math.log10(step))))
-        return math.floor(quantity / step) * step if precision == 0 else round(
-            math.floor(quantity / step) * step, precision
-        )
+        q, s = Decimal(str(quantity)), Decimal(str(step))
+        return float((q / s).to_integral_value(rounding=ROUND_DOWN) * s)
+
+    @staticmethod
+    def _check_notional(info, notional):
+        """Fail fast when an order would violate the pair's minimum value."""
+        minimum = info.get("min_notional") or 0.0
+        if minimum and notional < minimum:
+            raise ExchangeError(
+                f"{info['symbol']}: order value {notional:.2f} {info['quote']} "
+                f"is below the exchange minimum of {minimum:g}"
+            )
+
+    def _free_balance(self, asset):
+        acct = self._request("GET", "/api/v3/account", signed=True)
+        for entry in acct.get("balances", []):
+            if entry["asset"] == asset:
+                return float(entry["free"])
+        return 0.0
 
     # -- ExchangeClient ------------------------------------------------------
 
@@ -147,6 +187,10 @@ class BinanceClient(ExchangeClient):
                 return amount / prices[rev]
             if asset + "USDT" in prices and self.quote_asset + "USDT" in prices:
                 return amount * prices[asset + "USDT"] / prices[self.quote_asset + "USDT"]
+            if asset not in self._unpriced_warned:
+                self._unpriced_warned.add(asset)
+                log.warning("get_balances: no price route for %s (amount %s), "
+                            "excluding it from the portfolio value", asset, amount)
             return 0.0
 
         balances = []
@@ -168,9 +212,9 @@ class BinanceClient(ExchangeClient):
                 raise ExchangeError(
                     f"Quantity {quantity} rounds to zero for {symbol_info['symbol']}"
                 )
-            params["quantity"] = f"{qty:.8f}".rstrip("0").rstrip(".")
+            params["quantity"] = _fmt_qty(qty)
         else:
-            params["quoteOrderQty"] = f"{quote_qty:.8f}".rstrip("0").rstrip(".")
+            params["quoteOrderQty"] = _fmt_qty(quote_qty)
 
         if self.dry_run:
             log.info("[DRY RUN] Binance order: %s", params)
@@ -181,10 +225,19 @@ class BinanceClient(ExchangeClient):
         """Market-convert from_asset -> to_asset.
 
         Uses a direct trading pair when one exists, otherwise routes through
-        the quote asset in two legs (e.g. PAXG -> USDT -> BNB).
+        the quote asset in two legs (e.g. PAXG -> USDT -> BNB). Both legs are
+        validated against the exchange minimums before any order is placed.
         """
         if from_asset == to_asset:
             raise ExchangeError("swap: from and to asset are identical")
+
+        if not self.dry_run:
+            # Never try to sell more than is actually free (fees/rounding
+            # can make the engine's view slightly optimistic).
+            free = self._free_balance(from_asset)
+            if free <= 0:
+                raise ExchangeError(f"No free {from_asset} balance to swap")
+            amount = min(amount, free)
 
         quote_value = amount * self.get_price(from_asset)
         orders = []
@@ -192,17 +245,23 @@ class BinanceClient(ExchangeClient):
         direct = self._find_symbol(from_asset, to_asset)
         reverse = self._find_symbol(to_asset, from_asset)
         if direct:  # SELL base for quote
+            self._check_notional(direct, amount * self.get_price(from_asset, to_asset))
             orders.append(self._market_order(direct, "SELL", quantity=amount))
         elif reverse:  # BUY base spending quote
+            self._check_notional(reverse, amount)
             orders.append(self._market_order(reverse, "BUY", quote_qty=amount))
         else:
-            # two legs through the configured quote asset
+            # two legs through the configured quote asset; the buy leg gets a
+            # small haircut for the sell leg's fee
             leg1 = self._find_symbol(from_asset, self.quote_asset)
             leg2 = self._find_symbol(to_asset, self.quote_asset)
             if not leg1 or not leg2:
                 raise ExchangeError(f"No trade route {from_asset} -> {to_asset}")
+            buy_value = quote_value * 0.999
+            self._check_notional(leg1, quote_value)
+            self._check_notional(leg2, buy_value)
             orders.append(self._market_order(leg1, "SELL", quantity=amount))
-            orders.append(self._market_order(leg2, "BUY", quote_qty=quote_value * 0.999))
+            orders.append(self._market_order(leg2, "BUY", quote_qty=buy_value))
 
         log.info("Swap %s %s -> %s (~%.2f %s)%s",
                  amount, from_asset, to_asset, quote_value, self.quote_asset,
@@ -239,9 +298,15 @@ class BinanceClient(ExchangeClient):
         repay = min(borrowed, free) if amount is None else min(amount, borrowed, free)
         if repay <= 0:
             return {"repaid": 0.0, "asset": asset}
-        params = {"asset": asset, "amount": f"{repay:.8f}"}
+        params = {
+            "asset": asset,
+            "amount": f"{repay:.8f}",
+            "isIsolated": "FALSE",
+            "type": "REPAY",  # unified borrow-repay endpoint
+        }
         if self.dry_run:
             log.info("[DRY RUN] Binance margin repay: %s", params)
             return {"repaid": repay, "asset": asset, "dry_run": True}
-        result = self._request("POST", "/sapi/v1/margin/repay", params=params, signed=True)
+        result = self._request("POST", "/sapi/v1/margin/borrow-repay",
+                               params=params, signed=True)
         return {"repaid": repay, "asset": asset, "tranId": result.get("tranId")}

@@ -11,7 +11,7 @@ import os
 import uvicorn
 
 from .engine import TradingEngine
-from .settings import Settings
+from .settings import Settings, exchange_configured
 from .web.app import create_app
 
 logging.basicConfig(
@@ -27,8 +27,16 @@ def main():
     app = create_app(engine)
 
     if os.getenv("AUTOSTART", "").strip().lower() in ("1", "true", "yes"):
-        log.info("AUTOSTART set -- starting trading engine")
-        engine.start()
+        if not settings.get("runtime.engine_enabled", True):
+            log.info("AUTOSTART set but the engine was explicitly stopped in "
+                     "the web UI; press Start there to re-enable it")
+        elif exchange_configured(settings):
+            log.info("AUTOSTART set -- starting trading engine")
+            engine.start()
+        else:
+            log.info("AUTOSTART set but no exchange credentials configured yet; "
+                     "the engine starts automatically once they are saved in "
+                     "the web UI")
 
     host = settings.get("web.host", "0.0.0.0")
     port = int(settings.get("web.port", 8000))

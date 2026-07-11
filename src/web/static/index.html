@@ -206,12 +206,12 @@
           <div><label>Timezone</label><input name="schedule.timezone"></div>
         </div>
         <div class="row" style="margin-top:8px">
-          <div><label>Day: refresh [min,max]</label><input name="schedule.daytime.refresh"></div>
-          <div><label>Day: rebalance</label><input name="schedule.daytime.rebalance"></div>
-          <div><label>Day: repay</label><input name="schedule.daytime.repay"></div>
-          <div><label>Night: refresh</label><input name="schedule.nighttime.refresh"></div>
-          <div><label>Night: rebalance</label><input name="schedule.nighttime.rebalance"></div>
-          <div><label>Night: repay</label><input name="schedule.nighttime.repay"></div>
+          <div><label>Day: refresh (min-max)</label><input name="schedule.daytime.refresh" data-type="interval" placeholder="min-max"></div>
+          <div><label>Day: rebalance</label><input name="schedule.daytime.rebalance" data-type="interval" placeholder="min-max"></div>
+          <div><label>Day: repay</label><input name="schedule.daytime.repay" data-type="interval" placeholder="min-max"></div>
+          <div><label>Night: refresh</label><input name="schedule.nighttime.refresh" data-type="interval" placeholder="min-max"></div>
+          <div><label>Night: rebalance</label><input name="schedule.nighttime.rebalance" data-type="interval" placeholder="min-max"></div>
+          <div><label>Night: repay</label><input name="schedule.nighttime.repay" data-type="interval" placeholder="min-max"></div>
         </div>
       </fieldset>
 
@@ -236,6 +236,10 @@
 <script>
 const $ = s => document.querySelector(s);
 const api = (path, opts) => fetch(path, opts).then(r => r.json());
+// Escape everything interpolated into innerHTML: asset names come from the
+// exchange, reasons/actions from the LLM, event messages may embed either.
+const esc = v => String(v).replace(/[&<>"']/g,
+  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
 function toast(msg) {
   const el = $("#toast"); el.textContent = msg; el.classList.add("show");
@@ -284,7 +288,7 @@ async function poll() {
       : "no outstanding loan";
 
     $("#balances tbody").innerHTML = st.balances.map(b => `
-      <tr><td>${b.asset}</td>
+      <tr><td>${esc(b.asset)}</td>
         <td class="num">${b.amount.toLocaleString(undefined,{maximumFractionDigits:6})}</td>
         <td class="num">${b.quote_value.toFixed(2)}</td>
         <td class="num">${b.percentage.toFixed(1)}%</td>
@@ -300,24 +304,24 @@ async function poll() {
     }
 
     $("#targets tbody").innerHTML = (st.target_distribution || []).map(([a,p]) => `
-      <tr><td>${a}</td><td class="num">${(p*100).toFixed(1)}%</td>
+      <tr><td>${esc(a)}</td><td class="num">${(p*100).toFixed(1)}%</td>
         <td style="width:50%"><div class="bar"><div style="width:${Math.min(100,p*100)}%"></div></div></td>
       </tr>`).join("") || `<tr><td class="muted">none yet</td></tr>`;
 
     $("#schedule tbody").innerHTML = sch.jobs.map(j => `
-      <tr><td>${j.name}</td>
+      <tr><td>${esc(j.name)}</td>
         <td class="num">${j.interval[0]}–${j.interval[1]}</td>
         <td class="num">${j.next_run ? fmtTs(j.next_run) + " (" + j.minutes_until + "m)" : "–"}</td>
       </tr>`).join("");
 
     $("#recs tbody").innerHTML = (st.recommendations || [])
       .filter(r => !r.error)
-      .map(r => `<tr><td>${r.assets.join(" / ")}</td><td>${r.action}</td>
+      .map(r => `<tr><td>${esc(r.assets.join(" / "))}</td><td>${esc(r.action)}</td>
                  <td class="num">${(r.confidence ?? 0).toFixed(2)}</td></tr>`).join("")
       || `<tr><td colspan="3" class="muted">none yet</td></tr>`;
 
     $("#log").innerHTML = st.events.map(e =>
-      `<div class="lv-${e.level}">[${fmtTs(e.ts)}] ${e.message}</div>`).join("");
+      `<div class="lv-${esc(e.level)}">[${fmtTs(e.ts)}] ${esc(e.message)}</div>`).join("");
   } catch (e) { /* server restarting */ }
 }
 setInterval(poll, 5000); poll();
@@ -341,6 +345,7 @@ async function loadConfig() {
     let v = getPath(cfg, el.name);
     if (v === undefined || v === null) return;
     if (el.name === "trading.assets") v = JSON.stringify(v, null, 2);
+    else if (el.dataset.type === "interval" && Array.isArray(v)) v = v.join("-");
     else if (Array.isArray(v)) v = JSON.stringify(v);
     else if (typeof v === "boolean") v = String(v);
     el.value = v;
@@ -353,7 +358,12 @@ $("#btn-save").onclick = async () => {
   document.querySelectorAll("#config-form [name]").forEach(el => {
     let v = el.value;
     if (v === "") return;
-    if (el.name === "trading.assets" || v.startsWith("[") ) {
+    if (el.dataset.type === "interval") {
+      v = v.replace(/[\[\]\s]/g, "").split(/[-,]/).map(Number);
+      if (v.length !== 2 || v.some(isNaN) || v[0] <= 0 || v[1] < v[0]) {
+        toast("Invalid interval in " + el.name + " (use e.g. 30-45)"); ok = false; return;
+      }
+    } else if (el.name === "trading.assets" || v.startsWith("[") ) {
       try { v = JSON.parse(v); } catch { toast("Invalid JSON in " + el.name); ok = false; return; }
     } else if (v === "true" || v === "false") v = v === "true";
     else if (el.type === "number") v = parseFloat(v);

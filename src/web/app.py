@@ -1,6 +1,7 @@
 """FastAPI application: configuration + monitoring UI and JSON API."""
 
 import logging
+import os
 import threading
 from pathlib import Path
 
@@ -8,6 +9,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 
 from ..exchanges import ExchangeError, create_client
+from ..settings import exchange_configured
 
 log = logging.getLogger(__name__)
 
@@ -25,6 +27,16 @@ def create_app(engine):
     @app.get("/", include_in_schema=False)
     def index():
         return FileResponse(STATIC_DIR / "index.html")
+
+    # -- health (container healthcheck) -------------------------------------
+
+    @app.get("/api/health")
+    def health():
+        return {
+            "status": "ok",
+            "engine_running": engine.state.engine_running,
+            "dry_run": settings.get("dry_run", True),
+        }
 
     # -- status --------------------------------------------------------------
 
@@ -52,6 +64,18 @@ def create_app(engine):
         except (TypeError, ValueError) as exc:
             raise HTTPException(400, f"Invalid configuration: {exc}")
         engine.state.log("Configuration updated via web UI")
+
+        # In autostart deployments (podman) the engine comes up on its own as
+        # soon as usable exchange credentials exist -- but never against an
+        # explicit stop (runtime.engine_enabled persists that decision).
+        autostart = os.getenv("AUTOSTART", "").strip().lower() in ("1", "true", "yes")
+        if (autostart
+                and not engine.state.engine_running
+                and settings.get("runtime.engine_enabled", True)
+                and exchange_configured(settings)):
+            engine.state.log("Exchange credentials configured -- starting engine automatically")
+            engine.start()
+
         return settings.masked()
 
     # -- engine control -----------------------------------------------------------
