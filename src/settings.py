@@ -1,13 +1,20 @@
 """Central configuration store.
 
-Configuration lives in ``config/config.json`` (gitignored) and can be edited
-through the web UI. Precedence:
+Effective configuration is composed from three layers (later wins):
 
-  1. Values saved through the UI (persisted in the config file) always win.
-  2. Environment variables only *bootstrap* keys the file does not define yet
-     -- so a stale ``.env`` can never silently revert a decision made in the
-     UI (e.g. flip dry-run back off after a container restart).
-  3. Built-in defaults fill the rest.
+  defaults  <  environment variables  <  config file (UI-saved values)
+
+The config file (``config/config.json``, gitignored) is an *overlay*: it
+contains only the keys the user actually changed through the web UI (or via
+``update()``), never env-derived or default values. Consequences:
+
+  - A stale ``.env`` can never silently revert a decision made in the UI
+    (e.g. flip dry-run back off after a container restart) -- the UI-saved
+    value sits in a higher layer.
+  - Env vars keep working across restarts for everything the UI never
+    touched (they are not frozen into the file by unrelated saves).
+  - Secrets supplied via env are not written to disk unless the user
+    re-enters them in the UI.
 
 Secrets are never returned to the UI in clear text -- they are masked, and a
 masked value sent back by the UI is ignored on save.
@@ -205,17 +212,6 @@ def _deep_merge(base, override, prefix=""):
     return base
 
 
-def _leaf_paths(data, prefix=""):
-    paths = set()
-    for key, value in data.items():
-        dotted = f"{prefix}{key}"
-        if isinstance(value, dict) and dotted not in REPLACE_PATHS:
-            paths |= _leaf_paths(value, dotted + ".")
-        else:
-            paths.add(dotted)
-    return paths
-
-
 def _coerce(value, template):
     """Coerce an incoming value to the shape of the default it replaces.
 
@@ -243,41 +239,43 @@ def _coerce(value, template):
 
 
 class Settings:
-    """Thread-safe configuration with JSON persistence."""
+    """Thread-safe layered configuration with JSON persistence.
+
+    ``self._overlay`` holds only user-changed values (what the file stores);
+    ``self._data`` is the composed effective view (defaults < env < overlay).
+    """
 
     def __init__(self, path=CONFIG_PATH):
         self._path = Path(path)
         self._lock = threading.RLock()
-        self._data = copy.deepcopy(DEFAULTS)
-        file_keys = self._load_file()
-        self._apply_env(skip=file_keys)
+        self._overlay = self._load_file()
+        self._compose()
 
     # -- persistence ------------------------------------------------------
 
     def _load_file(self):
-        """Merge the config file in; return the set of leaf paths it defines."""
         if not self._path.exists():
-            return set()
+            return {}
         try:
-            stored = json.loads(self._path.read_text())
+            return json.loads(self._path.read_text())
         except (json.JSONDecodeError, OSError) as exc:
             raise RuntimeError(f"Could not read {self._path}: {exc}") from exc
-        _deep_merge(self._data, stored)
-        return _leaf_paths(stored)
 
-    def _apply_env(self, skip=()):
-        """Environment variables bootstrap keys the file does not define."""
+    def _compose(self):
+        data = copy.deepcopy(DEFAULTS)
         for env_name, dotted in ENV_OVERRIDES.items():
             raw = os.getenv(env_name)
-            if raw is None or raw == "" or dotted in skip:
+            if raw is None or raw == "":
                 continue
             template = _get_path(DEFAULTS, dotted)
-            _set_path(self._data, dotted, _coerce(raw, template))
+            _set_path(data, dotted, _coerce(raw, template))
+        _deep_merge(data, copy.deepcopy(self._overlay))
+        self._data = data
 
     def save(self):
         with self._lock:
             self._path.parent.mkdir(parents=True, exist_ok=True)
-            self._path.write_text(json.dumps(self._data, indent=2))
+            self._path.write_text(json.dumps(self._overlay, indent=2))
 
     # -- access -----------------------------------------------------------
 
@@ -325,5 +323,6 @@ class Settings:
         incoming = copy.deepcopy(incoming)
         scrub(incoming)
         with self._lock:
-            _deep_merge(self._data, incoming)
+            _deep_merge(self._overlay, incoming)
+            self._compose()
             self.save()

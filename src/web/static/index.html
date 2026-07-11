@@ -127,7 +127,10 @@
     </div>
 
     <div class="card wide">
-      <h2>Activity log</h2>
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px">
+        <h2 style="margin:0">Activity log</h2>
+        <button class="secondary" id="btn-copy-log" onclick="copyLog()">Copy all</button>
+      </div>
       <div id="log"></div>
     </div>
   </section>
@@ -259,6 +262,7 @@ document.querySelectorAll("nav button").forEach(btn => {
 
 /* ---------- dashboard polling ---------- */
 let quote = "USDT";
+let lastEvents = [];
 const fmtTs = ts => ts ? new Date(ts * 1000).toLocaleTimeString() : "–";
 
 async function poll() {
@@ -320,11 +324,35 @@ async function poll() {
                  <td class="num">${(r.confidence ?? 0).toFixed(2)}</td></tr>`).join("")
       || `<tr><td colspan="3" class="muted">none yet</td></tr>`;
 
+    lastEvents = st.events;
     $("#log").innerHTML = st.events.map(e =>
       `<div class="lv-${esc(e.level)}">[${fmtTs(e.ts)}] ${esc(e.message)}</div>`).join("");
   } catch (e) { /* server restarting */ }
 }
 setInterval(poll, 5000); poll();
+
+/* ---------- copy the whole activity log as plain text ---------- */
+async function copyLog() {
+  if (!lastEvents.length) { toast("Log is empty"); return; }
+  const text = lastEvents.slice().reverse()  // oldest first, reads top-down
+    .map(e => `[${new Date(e.ts * 1000).toLocaleString()}] ` +
+              `${(e.level || "info").toUpperCase().padEnd(7)} ${e.message}`)
+    .join("\n");
+  try {
+    await navigator.clipboard.writeText(text);
+    toast(`Copied ${lastEvents.length} log lines`);
+  } catch (err) {
+    // clipboard API needs a secure context; fall back to a hidden textarea
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    ta.remove();
+    toast(ok ? `Copied ${lastEvents.length} log lines` : "Copy failed");
+  }
+}
 
 /* ---------- controls ---------- */
 $("#btn-start").onclick = async () => { await api("/api/engine/start", {method:"POST"}); toast("Engine started"); poll(); };
