@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trading Automator</title>
+<style>
+  :root {
+    --bg: #0f1420; --panel: #171e2e; --panel2: #1d2537; --border: #2a3550;
+    --text: #e6ebf5; --muted: #8b97b0; --accent: #4f8cff; --green: #34c98e;
+    --red: #f06a6a; --yellow: #e8b64c; --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+         background: var(--bg); color: var(--text); }
+  header { display: flex; align-items: center; gap: 16px; padding: 14px 22px;
+           background: var(--panel); border-bottom: 1px solid var(--border);
+           position: sticky; top: 0; z-index: 5; flex-wrap: wrap; }
+  header h1 { font-size: 17px; margin: 0 8px 0 0; }
+  .pill { padding: 3px 10px; border-radius: 999px; font-size: 12px;
+          border: 1px solid var(--border); background: var(--panel2); color: var(--muted); }
+  .pill.on  { color: var(--green); border-color: var(--green); }
+  .pill.off { color: var(--red);   border-color: var(--red); }
+  .pill.warn{ color: var(--yellow);border-color: var(--yellow); }
+  .spacer { flex: 1; }
+  button { background: var(--accent); border: 0; color: #fff; padding: 7px 14px;
+           border-radius: 8px; cursor: pointer; font-size: 13px; }
+  button.secondary { background: var(--panel2); border: 1px solid var(--border); color: var(--text); }
+  button.danger { background: var(--red); }
+  button:disabled { opacity: .45; cursor: default; }
+  nav { display: flex; gap: 6px; padding: 10px 22px 0; }
+  nav button { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+  nav button.active { background: var(--panel2); color: var(--text); }
+  main { padding: 16px 22px 60px; max-width: 1200px; margin: 0 auto; }
+  .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+          padding: 14px 16px; }
+  .card h2 { font-size: 13px; margin: 0 0 10px; text-transform: uppercase;
+             letter-spacing: .08em; color: var(--muted); }
+  .wide { grid-column: 1 / -1; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; }
+  td.num, th.num { text-align: right; font-family: var(--mono); }
+  .bar { height: 6px; border-radius: 3px; background: var(--panel2); overflow: hidden; }
+  .bar > div { height: 100%; background: var(--accent); }
+  .stat { font-size: 22px; font-weight: 600; }
+  .muted { color: var(--muted); font-size: 12px; }
+  #log { font-family: var(--mono); font-size: 12px; max-height: 340px; overflow-y: auto; }
+  #log div { padding: 3px 0; border-bottom: 1px solid var(--panel2); }
+  .lv-error { color: var(--red); } .lv-warning { color: var(--yellow); }
+  .lv-trade { color: var(--green); }
+  fieldset { border: 1px solid var(--border); border-radius: 10px; margin: 0 0 14px;
+             padding: 12px 14px; }
+  legend { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; padding: 0 6px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 3px; }
+  input, select, textarea { width: 100%; background: var(--panel2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 7px; padding: 7px 9px; font-size: 13px; }
+  textarea { font-family: var(--mono); min-height: 180px; }
+  .row { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+  .sentiment { font-size: 16px; font-weight: 600; text-transform: capitalize; }
+  .sentiment.bullish { color: var(--green); } .sentiment.bearish { color: var(--red); }
+  .sentiment.neutral { color: var(--yellow); }
+  #toast { position: fixed; bottom: 18px; right: 18px; background: var(--panel2);
+    border: 1px solid var(--border); padding: 10px 16px; border-radius: 10px;
+    opacity: 0; transition: opacity .3s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Trading Automator</h1>
+  <span id="pill-engine"  class="pill">engine: …</span>
+  <span id="pill-dryrun"  class="pill">dry run</span>
+  <span id="pill-exchange"class="pill">exchange</span>
+  <span id="pill-period"  class="pill">period</span>
+  <span class="spacer"></span>
+  <button id="btn-start">Start engine</button>
+  <button id="btn-stop" class="danger">Stop</button>
+</header>
+
+<nav>
+  <button data-tab="dashboard" class="active">Dashboard</button>
+  <button data-tab="settings">Settings</button>
+</nav>
+
+<main>
+  <!-- ============ DASHBOARD ============ -->
+  <section id="tab-dashboard" class="grid">
+    <div class="card">
+      <h2>Portfolio</h2>
+      <div class="stat" id="total-value">–</div>
+      <div class="muted" id="loan-line"></div>
+      <table id="balances"><thead>
+        <tr><th>Asset</th><th class="num">Amount</th><th class="num">Value</th>
+            <th class="num">%</th><th style="width:90px"></th></tr>
+      </thead><tbody></tbody></table>
+    </div>
+
+    <div class="card">
+      <h2>Market sentiment</h2>
+      <div class="sentiment" id="sentiment">no evaluation yet</div>
+      <p class="muted" id="sentiment-reason"></p>
+      <h2 style="margin-top:14px">Target distribution</h2>
+      <table id="targets"><tbody></tbody></table>
+    </div>
+
+    <div class="card">
+      <h2>Schedule</h2>
+      <table id="schedule"><thead>
+        <tr><th>Job</th><th class="num">Interval (min)</th><th class="num">Next run</th></tr>
+      </thead><tbody></tbody></table>
+      <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap">
+        <button class="secondary" onclick="runJob('refresh')">Refresh now</button>
+        <button class="secondary" onclick="runJob('rebalance')">Rebalance now</button>
+        <button class="secondary" onclick="runJob('repay')">Repay now</button>
+        <button class="secondary" onclick="runJob('sweep')">Sweep dust</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>LLM recommendations</h2>
+      <table id="recs"><thead>
+        <tr><th>Pair</th><th>Action</th><th class="num">Confidence</th></tr>
+      </thead><tbody></tbody></table>
+    </div>
+
+    <div class="card wide">
+      <h2>Activity log</h2>
+      <div id="log"></div>
+    </div>
+  </section>
+
+  <!-- ============ SETTINGS ============ -->
+  <section id="tab-settings" style="display:none">
+    <form id="config-form" class="card" onsubmit="return false">
+      <fieldset>
+        <legend>General</legend>
+        <div class="row">
+          <div><label>Exchange</label>
+            <select name="exchange">
+              <option value="binance">Binance</option>
+              <option value="etoro">eToro</option>
+            </select></div>
+          <div><label>Dry run (no real orders)</label>
+            <select name="dry_run"><option value="true">on — safe</option>
+              <option value="false">off — LIVE TRADING</option></select></div>
+        </div>
+        <div style="margin-top:10px">
+          <button class="secondary" id="btn-test">Test exchange connection</button>
+          <span class="muted" id="test-result"></span>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Binance API</legend>
+        <div class="row">
+          <div><label>API key</label><input name="binance.api_key" autocomplete="off"></div>
+          <div><label>API secret</label><input name="binance.api_secret" type="password" autocomplete="off"></div>
+        </div>
+        <p class="muted">Create keys with reading + spot/margin trading only. Never enable withdrawals. Restrict to your IP.</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>eToro API</legend>
+        <div class="row">
+          <div><label>Subscription key</label><input name="etoro.api_key" autocomplete="off"></div>
+          <div><label>User key</label><input name="etoro.user_key" type="password" autocomplete="off"></div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>LLM providers</legend>
+        <div class="row">
+          <div><label>Anthropic API key (primary)</label><input name="llm.anthropic_api_key" type="password" autocomplete="off"></div>
+          <div><label>Anthropic model</label><input name="llm.anthropic_model"></div>
+          <div><label>OpenAI API key (fallback)</label><input name="llm.openai_api_key" type="password" autocomplete="off"></div>
+          <div><label>OpenAI model</label><input name="llm.openai_model"></div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Trading parameters</legend>
+        <div class="row">
+          <div><label>Quote / stable asset</label><input name="trading.quote_asset"></div>
+          <div><label>Anchor asset</label><input name="trading.anchor_asset"></div>
+          <div><label>Anchor target %</label><input name="trading.anchor_target_percent" type="number" step="0.1"></div>
+          <div><label>Anchor swap min</label><input name="trading.anchor_swap_min" type="number" step="0.1"></div>
+          <div><label>Anchor swap max</label><input name="trading.anchor_swap_max" type="number" step="0.1"></div>
+          <div><label>Reserve % in quote (0-1)</label><input name="trading.reserve_percent" type="number" step="0.01" min="0" max="0.99"></div>
+          <div><label>Rebalance delta (0-1)</label><input name="trading.rebalance_delta" type="number" step="0.01"></div>
+          <div><label>Min trade value</label><input name="trading.min_trade_value" type="number" step="1"></div>
+          <div><label>Dust threshold</label><input name="trading.dust_threshold" type="number" step="1"></div>
+          <div><label>TA interval</label><input name="trading.analysis_interval"></div>
+        </div>
+        <label>Asset universe (JSON)</label>
+        <textarea name="trading.assets" spellcheck="false"></textarea>
+      </fieldset>
+
+      <fieldset>
+        <legend>Schedule</legend>
+        <div class="row">
+          <div><label>Latitude</label><input name="schedule.latitude" type="number" step="0.001"></div>
+          <div><label>Longitude</label><input name="schedule.longitude" type="number" step="0.001"></div>
+          <div><label>Timezone</label><input name="schedule.timezone"></div>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <div><label>Day: refresh [min,max]</label><input name="schedule.daytime.refresh"></div>
+          <div><label>Day: rebalance</label><input name="schedule.daytime.rebalance"></div>
+          <div><label>Day: repay</label><input name="schedule.daytime.repay"></div>
+          <div><label>Night: refresh</label><input name="schedule.nighttime.refresh"></div>
+          <div><label>Night: rebalance</label><input name="schedule.nighttime.rebalance"></div>
+          <div><label>Night: repay</label><input name="schedule.nighttime.repay"></div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>SMS alerts (sipgate)</legend>
+        <div class="row">
+          <div><label>Enabled</label>
+            <select name="sms.enabled"><option value="false">off</option><option value="true">on</option></select></div>
+          <div><label>Auth token</label><input name="sms.auth_token" type="password" autocomplete="off"></div>
+          <div><label>SMS id</label><input name="sms.sms_id"></div>
+          <div><label>Recipient</label><input name="sms.recipient"></div>
+        </div>
+      </fieldset>
+
+      <button id="btn-save">Save configuration</button>
+    </form>
+  </section>
+</main>
+
+<div id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const api = (path, opts) => fetch(path, opts).then(r => r.json());
+
+function toast(msg) {
+  const el = $("#toast"); el.textContent = msg; el.classList.add("show");
+  setTimeout(() => el.classList.remove("show"), 2600);
+}
+
+/* ---------- tabs ---------- */
+document.querySelectorAll("nav button").forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    $("#tab-dashboard").style.display = btn.dataset.tab === "dashboard" ? "" : "none";
+    $("#tab-settings").style.display  = btn.dataset.tab === "settings"  ? "" : "none";
+    if (btn.dataset.tab === "settings") loadConfig();
+  };
+});
+
+/* ---------- dashboard polling ---------- */
+let quote = "USDT";
+const fmtTs = ts => ts ? new Date(ts * 1000).toLocaleTimeString() : "–";
+
+async function poll() {
+  try {
+    const s = await api("/api/status");
+    quote = s.quote_asset || "USDT";
+    const st = s.state, sch = s.scheduler;
+
+    const pe = $("#pill-engine");
+    pe.textContent = "engine: " + (st.engine_running ? "running" : "stopped")
+      + (st.current_job ? " · " + st.current_job : "");
+    pe.className = "pill " + (st.engine_running ? "on" : "off");
+
+    const pd = $("#pill-dryrun");
+    pd.textContent = s.dry_run ? "DRY RUN" : "LIVE";
+    pd.className = "pill " + (s.dry_run ? "warn" : "on");
+
+    $("#pill-exchange").textContent = s.exchange + " · llm: " + s.llm_provider;
+    $("#pill-period").textContent = sch.period;
+    $("#btn-start").disabled = st.engine_running;
+    $("#btn-stop").disabled = !st.engine_running;
+
+    $("#total-value").textContent =
+      st.total_value.toLocaleString(undefined, {maximumFractionDigits: 2}) + " " + quote;
+    $("#loan-line").textContent = st.loan_balance > 0
+      ? "outstanding loan: " + st.loan_balance.toFixed(2) + " " + quote
+      : "no outstanding loan";
+
+    $("#balances tbody").innerHTML = st.balances.map(b => `
+      <tr><td>${b.asset}</td>
+        <td class="num">${b.amount.toLocaleString(undefined,{maximumFractionDigits:6})}</td>
+        <td class="num">${b.quote_value.toFixed(2)}</td>
+        <td class="num">${b.percentage.toFixed(1)}%</td>
+        <td><div class="bar"><div style="width:${Math.min(100,b.percentage)}%"></div></div></td>
+      </tr>`).join("") || `<tr><td colspan="5" class="muted">no data — run refresh</td></tr>`;
+
+    const ev = st.market_evaluation || {};
+    if (ev.recommendation) {
+      $("#sentiment").textContent = ev.recommendation
+        + (ev.bullish_crypto && ev.bullish_crypto !== "none" ? " · pick: " + ev.bullish_crypto : "");
+      $("#sentiment").className = "sentiment " + ev.recommendation;
+      $("#sentiment-reason").textContent = (ev.reason || "") + " (" + fmtTs(ev.ts) + ")";
+    }
+
+    $("#targets tbody").innerHTML = (st.target_distribution || []).map(([a,p]) => `
+      <tr><td>${a}</td><td class="num">${(p*100).toFixed(1)}%</td>
+        <td style="width:50%"><div class="bar"><div style="width:${Math.min(100,p*100)}%"></div></div></td>
+      </tr>`).join("") || `<tr><td class="muted">none yet</td></tr>`;
+
+    $("#schedule tbody").innerHTML = sch.jobs.map(j => `
+      <tr><td>${j.name}</td>
+        <td class="num">${j.interval[0]}–${j.interval[1]}</td>
+        <td class="num">${j.next_run ? fmtTs(j.next_run) + " (" + j.minutes_until + "m)" : "–"}</td>
+      </tr>`).join("");
+
+    $("#recs tbody").innerHTML = (st.recommendations || [])
+      .filter(r => !r.error)
+      .map(r => `<tr><td>${r.assets.join(" / ")}</td><td>${r.action}</td>
+                 <td class="num">${(r.confidence ?? 0).toFixed(2)}</td></tr>`).join("")
+      || `<tr><td colspan="3" class="muted">none yet</td></tr>`;
+
+    $("#log").innerHTML = st.events.map(e =>
+      `<div class="lv-${e.level}">[${fmtTs(e.ts)}] ${e.message}</div>`).join("");
+  } catch (e) { /* server restarting */ }
+}
+setInterval(poll, 5000); poll();
+
+/* ---------- controls ---------- */
+$("#btn-start").onclick = async () => { await api("/api/engine/start", {method:"POST"}); toast("Engine started"); poll(); };
+$("#btn-stop").onclick  = async () => { await api("/api/engine/stop",  {method:"POST"}); toast("Engine stopped"); poll(); };
+async function runJob(job) { await api("/api/run/" + job, {method:"POST"}); toast(job + " started"); }
+
+/* ---------- settings form ---------- */
+const getPath = (obj, path) => path.split(".").reduce((o,k) => (o||{})[k], obj);
+const setPath = (obj, path, val) => {
+  const parts = path.split("."); let node = obj;
+  parts.slice(0,-1).forEach(k => node = (node[k] ??= {}));
+  node[parts.at(-1)] = val;
+};
+
+async function loadConfig() {
+  const cfg = await api("/api/config");
+  document.querySelectorAll("#config-form [name]").forEach(el => {
+    let v = getPath(cfg, el.name);
+    if (v === undefined || v === null) return;
+    if (el.name === "trading.assets") v = JSON.stringify(v, null, 2);
+    else if (Array.isArray(v)) v = JSON.stringify(v);
+    else if (typeof v === "boolean") v = String(v);
+    el.value = v;
+  });
+}
+
+$("#btn-save").onclick = async () => {
+  const payload = {};
+  let ok = true;
+  document.querySelectorAll("#config-form [name]").forEach(el => {
+    let v = el.value;
+    if (v === "") return;
+    if (el.name === "trading.assets" || v.startsWith("[") ) {
+      try { v = JSON.parse(v); } catch { toast("Invalid JSON in " + el.name); ok = false; return; }
+    } else if (v === "true" || v === "false") v = v === "true";
+    else if (el.type === "number") v = parseFloat(v);
+    setPath(payload, el.name, v);
+  });
+  if (!ok) return;
+  const res = await fetch("/api/config", {method:"PUT",
+    headers: {"Content-Type":"application/json"}, body: JSON.stringify(payload)});
+  toast(res.ok ? "Configuration saved" : "Save failed");
+  if (res.ok) loadConfig();
+};
+
+$("#btn-test").onclick = async () => {
+  $("#test-result").textContent = "testing…";
+  try {
+    const res = await fetch("/api/test-connection", {method:"POST"});
+    const data = await res.json();
+    $("#test-result").textContent = data.message;
+  } catch (e) { $("#test-result").textContent = "request failed"; }
+};
+</script>
+</body>
+</html>
