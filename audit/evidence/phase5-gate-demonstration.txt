@@ -1,0 +1,39 @@
+# Phase-5/6 standing-control demonstration evidence
+# commit context: post-repair working tree on branch claude/nexo-binance-etoro-refactor-3nw88j
+
+## ruff check src tests
+All checks passed!
+exit=0
+
+## pytest -q
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+43 passed, 1 warning in 2.08s
+
+## mutation_smoke.py
+  KILLED   action validation inverted
+  KILLED   secret mask disabled
+=== mutation score: 8/8 = 1.00 ===
+
+## check_deps.py
+DEPENDENCY GATE: PASS (9 pinned packages exist on PyPI)
+exit=0
+
+## pip-audit
+No known vulnerabilities found
+
+## secret_scan.py --history
+SECRET SCAN: PASS (no secrets in tracked product surface or history)
+exit=0
+
+## check_model_pins.py
+MODEL-PIN GATE: PASS (no floating '-latest' model aliases)
+exit=0
+
+## gate_selftest.py (calibration heartbeat)
+=== gate self-test (calibration heartbeat) ===
+  CAUGHT  D1 hard-coded credential  via /usr/local/bin/python3 scripts/secret_scan.py
+  CAUGHT  D2 removed universe guard  via -q tests/test_engine.py::test_sell_all_only_configured_crypto
+  CAUGHT  D3 non-existent dependency  via /usr/local/bin/python3 scripts/check_deps.py
+  CAUGHT  D4 swallowed exception  via check src/engine.py
+  CAUGHT  D6 unvalidated model output -> action  via -q tests/test_llm_and_exchange.py::test_swap_evaluation_rejects_bad_action
+=== fast-lane catch rate: 5/5 (D5 weak-suite class -> weekly mutation gate) ===

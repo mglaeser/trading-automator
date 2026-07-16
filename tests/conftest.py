@@ -7,7 +7,10 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.exchanges.base import (  # noqa: E402
-    Balance, ExchangeClient, SwapResult, add_percentages,
+    Balance,
+    ExchangeClient,
+    SwapResult,
+    add_percentages,
 )
 from src.settings import Settings  # noqa: E402
 from src.state import EngineState  # noqa: E402

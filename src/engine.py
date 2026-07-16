@@ -8,9 +8,14 @@ pipeline. A dust sweep is available on demand.
 Safety invariants:
   - Only assets in the configured universe are ever bought or sold; an
     airdropped or unknown asset on the account is never touched.
-  - A rebalance run aborts (no trades) when technical analysis is missing
-    for any buyable asset, when every pairwise LLM evaluation failed, or
-    when the market evaluation itself failed.
+  - The market rebalance opens no sentiment trades when technical analysis
+    is missing for any buyable asset, when every pairwise LLM evaluation
+    failed, or when the market evaluation itself failed. Independent
+    housekeeping (inflow split, anchor maintenance) runs before the market
+    analysis and is unaffected by that abort.
+  - Every trade passes _swap, which enforces a blast-radius cap: a swap above
+    max_swap_value is clamped down; a swap that would breach the rolling 24h
+    daily_trade_cap is refused and auto-halts the engine (persisted).
   - Buys are always funded: sells execute first and buys are clamped to
     the actually available quote balance.
   - A degenerate "bullish but nothing scored positive" signal keeps the
@@ -22,6 +27,7 @@ Safety invariants:
 import logging
 import threading
 import time
+from collections import deque
 
 from .analysis import evaluate_crypto_analysis, get_buyable_cryptos, get_crypto_analysis
 from .exchanges import ExchangeError, create_client
@@ -92,6 +98,8 @@ class TradingEngine:
         # for inflow detection. None until the first cycle completes, so the
         # engine's own cash reserve can never be mistaken for a deposit.
         self._last_cycle_quote = None
+        # Rolling record of (timestamp, executed quote value) for the trading cap.
+        self._trade_window = deque()
 
     # -- helpers ---------------------------------------------------------------
 
@@ -130,8 +138,52 @@ class TradingEngine:
         finally:
             self._job_lock.release()
 
+    def _traded_last_24h(self):
+        cutoff = time.time() - 24 * 3600
+        while self._trade_window and self._trade_window[0][0] < cutoff:
+            self._trade_window.popleft()
+        return sum(v for _, v in self._trade_window)
+
+    def _halt(self, reason):
+        """Trip the kill switch automatically: stop trading now, persist the
+        stop so a restart does not resurrect the engine, and shut the scheduler
+        down off-thread (a scheduled job runs on the scheduler thread, so it
+        must not join itself)."""
+        with self._lifecycle_lock:
+            already_stopped = not self.state.engine_running
+            self.state.set(engine_running=False)
+            self.settings.update({"runtime": {"engine_enabled": False}})
+        if already_stopped:
+            return
+        self.state.log(f"AUTO-HALT: {reason}. Engine stopped; press Start to resume.",
+                       level="error")
+        send_sms_alert(self.settings, f"Trading automator AUTO-HALT: {reason}")
+        threading.Thread(target=self.scheduler.stop, daemon=True,
+                         name="auto-halt").start()
+
     def _swap(self, client, from_asset, to_asset, amount):
+        # Blast-radius cap at the single trade chokepoint (A-11/A-34/A-35/B-08).
+        max_swap = float(self._trading("max_swap_value", 0.0) or 0.0)
+        daily_cap = float(self._trading("daily_trade_cap", 0.0) or 0.0)
+        quote = self._trading("quote_asset", "USDT")
+        if max_swap > 0 or daily_cap > 0:
+            est_value = amount * client.get_price(from_asset)
+            if max_swap > 0 and est_value > max_swap:
+                amount *= max_swap / est_value           # clamp down, never up
+                est_value = max_swap
+                self.state.log(
+                    f"Swap clamped to the per-swap ceiling of {max_swap:.2f} {quote}",
+                    level="warning",
+                )
+            if daily_cap > 0 and self._traded_last_24h() + est_value > daily_cap:
+                self._halt(
+                    f"daily trade cap of {daily_cap:.2f} {quote} would be exceeded "
+                    f"(already {self._traded_last_24h():.2f} in 24h)"
+                )
+                raise ExchangeError("daily trade cap reached; engine halted")
+
         result = client.swap(from_asset, to_asset, amount)
+        self._trade_window.append((time.time(), result.quote_value))
         self.state.record_swap(result)
         self.state.log(
             f"Swap {result.amount:.6f} {from_asset} -> {to_asset} "

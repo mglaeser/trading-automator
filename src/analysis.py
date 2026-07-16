@@ -111,7 +111,7 @@ def get_crypto_analysis(assets, interval="30m", use_cache=False,
                 analysis, details["symbol"], details["screener_exchange"], interval
             )
             log.info("Refined analysis for %s completed", ticker)
-        except Exception as exc:  # one bad ticker must not kill the run
+        except Exception as exc:  # noqa: BLE001 -- one bad ticker must not kill the run (logged)
             log.warning("Error analysing %s: %s", ticker, exc)
     return results
 

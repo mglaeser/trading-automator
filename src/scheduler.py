@@ -63,7 +63,7 @@ class Scheduler:
             sunrise, sunset = self.sun_times()
             now = datetime.now(sunrise.tzinfo)
             return "daytime" if sunrise < now < sunset else "nighttime"
-        except Exception as exc:  # bad coordinates etc. -- default to daytime
+        except Exception as exc:  # noqa: BLE001 -- bad coordinates fall back to daytime (logged)
             log.warning("Could not compute sun times: %s", exc)
             return "daytime"
 

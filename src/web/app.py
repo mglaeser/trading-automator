@@ -1,5 +1,6 @@
 """FastAPI application: configuration + monitoring UI and JSON API."""
 
+import contextlib
 import logging
 import os
 import threading
@@ -62,7 +63,7 @@ def create_app(engine):
         try:
             settings.update(payload)
         except (TypeError, ValueError) as exc:
-            raise HTTPException(400, f"Invalid configuration: {exc}")
+            raise HTTPException(400, f"Invalid configuration: {exc}") from exc
         engine.state.log("Configuration updated via web UI")
 
         # In autostart deployments (podman) the engine comes up on its own as
@@ -102,10 +103,9 @@ def create_app(engine):
         }[job]
 
         def runner():
-            try:
+            # Job errors are recorded in engine.state by _run_job; nothing to do here.
+            with contextlib.suppress(Exception):
                 target()
-            except Exception:
-                pass  # surfaced via engine state
 
         threading.Thread(target=runner, daemon=True, name=f"manual-{job}").start()
         return {"started": job}
@@ -122,7 +122,7 @@ def create_app(engine):
         except ExchangeError as exc:
             return JSONResponse(status_code=502,
                                 content={"ok": False, "message": str(exc)})
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 -- API boundary: unexpected errors become a 500
             return JSONResponse(status_code=500,
                                 content={"ok": False, "message": str(exc)})
 

@@ -89,7 +89,7 @@ class LLMClient:
         if self.current_provider == "anthropic":
             try:
                 return self._anthropic_completion(prompt)
-            except Exception as primary_exc:
+            except Exception as primary_exc:  # noqa: BLE001 -- any primary error triggers the fallback
                 log.warning("Anthropic request failed (%s), trying OpenAI",
                             primary_exc)
                 try:
@@ -138,7 +138,7 @@ class LLMClient:
             log.info("%s evaluated %s/%s: %s (%.2f)", self.current_provider,
                      asset_a, asset_b, action, confidence)
             return result
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 -- any error becomes a logged no-signal result
             log.error("crypto_swap_evaluation failed for %s/%s: %s",
                       asset_a, asset_b, exc)
             return {"error": str(exc), "assets": [asset_a, asset_b]}
@@ -166,6 +166,6 @@ class LLMClient:
             }
             log.info("Market evaluation: %s -- %s", sentiment, result["reason"])
             return result
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 -- any error becomes a logged no-signal result
             log.error("market_evaluation failed: %s", exc)
             return {"error": str(exc)}

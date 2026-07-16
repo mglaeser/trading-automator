@@ -1,0 +1,55 @@
+name: gate
+
+# The deterministic verification gate (A-01, B-01). No change reaches the default
+# branch without passing every job below. There is no override path: protect the
+# branch and require this workflow (see AGENTS.md / governance/constitution.md).
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0            # full history for the secret scan (B-06)
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Lint (ruff) — A-08/A-13/A-26
+        run: python -m ruff check src tests
+
+      - name: Tests (pytest) — A-02 backstop
+        run: python -m pytest -q
+
+      - name: Mutation smoke (core) — A-02/S4
+        run: python scripts/mutation_smoke.py
+
+      - name: Dependency existence + pinning — B-04/C-03
+        run: python scripts/check_deps.py
+
+      - name: SCA known-vuln scan (pip-audit) — A-08
+        run: python -m pip_audit -r requirements.txt --strict
+
+      - name: Secret scan (head + history) — B-06/A-08
+        run: python scripts/secret_scan.py --history
+
+      - name: Model-pin lint — B-13
+        run: python scripts/check_model_pins.py
+
+      - name: Calibration heartbeat (seeded defects) — A-36/S12
+        run: python scripts/gate_selftest.py
+
+      - name: Policy gate (fail-closed) — S1 / Article I
+        run: python scripts/policy_gate.py --merge

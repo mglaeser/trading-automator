@@ -28,9 +28,17 @@ Safety invariants enforced by the engine:
 
 - Only assets in the configured universe are ever bought or sold; airdrops
   or manually held positions are never touched.
-- A rebalance aborts without trading when technical analysis is missing for
-  any buyable asset, when all pairwise LLM evaluations failed, or when the
-  market evaluation failed — no decisions on partial data.
+- The market-driven rebalance opens no sentiment trades when technical
+  analysis is missing for any buyable asset, when all pairwise LLM
+  evaluations failed, or when the market evaluation failed — no market
+  decisions on partial data. (Independent housekeeping — the fresh-inflow
+  split and anchor-share maintenance — runs before the market analysis and
+  is unaffected by that abort.)
+- Every trade passes one chokepoint that enforces a **blast-radius cap**: a
+  single swap above `max_swap_value` is clamped down, and when a swap would
+  push the rolling 24h traded value over `daily_trade_cap` the engine refuses
+  it and **halts itself** (persisted, so it stays stopped until you press
+  Start). Set either cap to `0` to disable it.
 - Sells always run before buys, and buys are clamped to the actually
   available quote balance.
 - Every LLM response is schema-validated (action/assets/confidence/
@@ -142,10 +150,14 @@ python -m pytest tests/
 ```
 
 The suite covers the trading maths (allocation scoring, anchor targeting,
-inflow detection, funded rebalancing), config semantics (secret masking,
-env bootstrap precedence, asset-universe replacement), LLM response
-validation, Binance order mechanics, and the web API including the
-autostart rules — all against an in-memory fake exchange, no network needed.
+inflow detection, funded rebalancing), the blast-radius cap and auto-halt,
+config semantics (secret masking, env bootstrap precedence, asset-universe
+replacement), LLM response validation, the Binance order helpers (Decimal
+LOT_SIZE rounding, min-notional pre-check, transport-error sanitisation),
+and the web API including the autostart rules — all against an in-memory
+fake exchange, no network needed. The full verification gate (lint,
+mutation smoke, dependency-existence, secret scan, model-pin lint,
+seeded-defect calibration, policy gate) runs in CI — see `AGENTS.md`.
 
 ## Disclaimer
 

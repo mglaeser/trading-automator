@@ -1,0 +1,103 @@
+{
+  "commit_under_audit": "840e4f446409bca09d470e1d34a72181030f68b6",
+  "generated_phase": "0",
+  "note": "The denominator of the audit. Every item carries an id; 03b-coverage-ledger.md maps each to the checks that touched it.",
+  "source_modules": [
+    {"id": "src/settings.py", "role": "layered config store (defaults<env<overlay), secret masking, coercion"},
+    {"id": "src/engine.py", "role": "TradingEngine: all portfolio handlers + orchestration + lifecycle"},
+    {"id": "src/llm.py", "role": "LLMClient: Anthropic primary / OpenAI fallback, schema validation"},
+    {"id": "src/prompts.py", "role": "two prompt templates (swap analysis, market evaluation)"},
+    {"id": "src/analysis.py", "role": "TradingView TA fetch + refine + pairwise LLM orchestration"},
+    {"id": "src/cache.py", "role": "TTL file cache for TA/LLM responses (dry-run)"},
+    {"id": "src/scheduler.py", "role": "randomised day/night scheduler, sentiment overrides"},
+    {"id": "src/notifications.py", "role": "sipgate SMS alerts"},
+    {"id": "src/state.py", "role": "in-memory thread-safe EngineState + event log"},
+    {"id": "src/main.py", "role": "entrypoint: uvicorn + engine, AUTOSTART gate"},
+    {"id": "src/exchanges/base.py", "role": "ExchangeClient ABC, Balance/SwapResult dataclasses"},
+    {"id": "src/exchanges/binance_client.py", "role": "Binance spot+margin signed REST adapter"},
+    {"id": "src/exchanges/etoro_client.py", "role": "eToro developer-portal position adapter"},
+    {"id": "src/web/app.py", "role": "FastAPI app: config + monitoring API"},
+    {"id": "src/web/static/index.html", "role": "single-page dashboard + settings UI (client JS)"}
+  ],
+  "routes": [
+    {"id": "GET /", "handler": "index", "auth": "none", "mutates": false},
+    {"id": "GET /api/health", "handler": "health", "auth": "none", "mutates": false},
+    {"id": "GET /api/status", "handler": "status", "auth": "none", "mutates": false},
+    {"id": "GET /api/config", "handler": "get_config", "auth": "none", "mutates": false, "note": "secrets masked"},
+    {"id": "PUT /api/config", "handler": "put_config", "auth": "none", "mutates": true, "note": "writes config.json; can flip dry_run; can autostart engine"},
+    {"id": "POST /api/engine/start", "handler": "engine_start", "auth": "none", "mutates": true, "note": "starts trading loop"},
+    {"id": "POST /api/engine/stop", "handler": "engine_stop", "auth": "none", "mutates": true},
+    {"id": "POST /api/run/{job}", "handler": "run_job", "auth": "none", "mutates": true, "note": "job in {refresh,rebalance,repay,sweep}; can place trades if live"},
+    {"id": "POST /api/test-connection", "handler": "test_connection", "auth": "none", "mutates": false}
+  ],
+  "scheduled_jobs": [
+    {"id": "refresh", "effect": "read balances/loan", "mutates": false},
+    {"id": "rebalance", "effect": "TA+LLM pipeline -> trades", "mutates": true, "irreversible_when_live": true},
+    {"id": "repay", "effect": "repay Binance margin loan", "mutates": true, "irreversible_when_live": true},
+    {"id": "sweep", "effect": "sell dust below threshold", "mutates": true, "irreversible_when_live": true, "on_demand": true}
+  ],
+  "data_stores": [
+    {"id": "config/config.json", "kind": "file", "secrets": true, "personal_data": "operator-own API keys + SMS recipient", "gitignored": true},
+    {"id": "artifacts/cache/*.json", "kind": "file", "secrets": false, "contents": "TA indicators + LLM JSON (dry-run)", "gitignored": true},
+    {"id": "EngineState", "kind": "in-memory", "secrets": false, "contents": "event log, balances, swap history", "ephemeral": true},
+    {"id": ".env", "kind": "file", "secrets": true, "optional": true, "gitignored": true}
+  ],
+  "egress": [
+    {"id": "api.binance.com", "purpose": "balances/prices/orders/margin", "auth": "hmac", "money_moving": true},
+    {"id": "api.etoro.com", "purpose": "credit/portfolio/positions", "auth": "keys", "money_moving": true},
+    {"id": "api.anthropic.com", "purpose": "LLM primary", "auth": "api-key", "money_moving": false},
+    {"id": "api.openai.com", "purpose": "LLM fallback", "auth": "api-key", "money_moving": false},
+    {"id": "scanner.tradingview.com", "purpose": "technical indicators", "auth": "none", "money_moving": false},
+    {"id": "api.sipgate.com", "purpose": "SMS alerts", "auth": "token", "money_moving": false}
+  ],
+  "identities": [
+    {"id": "operator", "kind": "human", "note": "sole principal; holds all credentials"},
+    {"id": "binance-key", "kind": "credential", "scope": "read+spot/margin trade (recommended no-withdrawal, IP-pinned)"},
+    {"id": "etoro-keys", "kind": "credential", "scope": "account trading"},
+    {"id": "anthropic-key", "kind": "credential"},
+    {"id": "openai-key", "kind": "credential"},
+    {"id": "sipgate-token", "kind": "credential"}
+  ],
+  "prompts": [
+    {"id": "swap_analysis_prompt", "file": "src/prompts.py", "in_version_control": true},
+    {"id": "market_evaluation_prompt", "file": "src/prompts.py", "in_version_control": true},
+    {"id": "SYSTEM_PROMPT", "file": "src/llm.py", "in_version_control": true, "note": "static string constant"}
+  ],
+  "dependencies_runtime": [
+    {"id": "fastapi", "pin": "0.139.0"}, {"id": "uvicorn", "pin": "0.51.0"},
+    {"id": "requests", "pin": "2.33.1"}, {"id": "tradingview-ta", "pin": "3.3.0"},
+    {"id": "anthropic", "pin": "0.116.0"}, {"id": "openai", "pin": "2.45.0"},
+    {"id": "astral", "pin": "3.2"}, {"id": "pytz", "pin": "2026.2"},
+    {"id": "python-dotenv", "pin": "1.2.2"}
+  ],
+  "dependencies_dev": [
+    {"id": "pytest", "pin": ">=8"}, {"id": "httpx", "pin": ">=0.27"}
+  ],
+  "infra_files": [
+    {"id": "Dockerfile", "role": "python:3.12-slim image + HEALTHCHECK"},
+    {"id": "deploy.sh", "role": "podman one-liner deploy + day-2 ops"},
+    {"id": "compose.yaml", "role": "compose alternative"},
+    {"id": "requirements.txt", "role": "pinned runtime deps"},
+    {"id": "requirements-dev.txt", "role": "dev deps"},
+    {"id": ".env.example", "role": "bootstrap env template"},
+    {"id": ".gitignore", "role": "excludes .env, config.json, artifacts"}
+  ],
+  "tests": [
+    {"id": "tests/conftest.py", "role": "FakeClient + fixtures with env isolation"},
+    {"id": "tests/test_engine.py", "role": "12 tests: allocation, anchor, inflow, swap-to-target, lifecycle"},
+    {"id": "tests/test_llm_and_exchange.py", "role": "JSON parse, LLM schema, Binance mechanics, secret-leak"},
+    {"id": "tests/test_settings.py", "role": "masking, env precedence, coercion, asset replace"},
+    {"id": "tests/test_web.py", "role": "health/status/config/autostart/jobs"}
+  ],
+  "policy_bundle": {
+    "exists": false,
+    "location": null,
+    "writable_by": null,
+    "note": "No CI, no branch protection, no independent verifier. The gate does not exist at freeze; built in Phase 5."
+  },
+  "tools_callable_by_model": [],
+  "vector_stores": [],
+  "databases": [],
+  "rag_corpora": [],
+  "fine_tuned_models": []
+}

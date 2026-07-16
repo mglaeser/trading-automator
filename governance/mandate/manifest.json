@@ -1,0 +1,12 @@
+{
+  "catalogue_version": "1.0",
+  "note": "Two-volume mandate. Part 2 (Track C, v2.0) not yet delivered; part2.md is a placeholder. Combined hash covers the current concatenation and is recomputed when Part 2 arrives.",
+  "parts": [
+    {"id": "part1", "path": "governance/mandate/part1.md", "sha256": "e649ea7ccb4f1bd495b9a7ab2e0a40476824a63da3507b6e33d529dcf2f90742", "status": "delivered", "scope": "Track A + Track B (79 checks), regime, constitution"},
+    {"id": "part2", "path": "governance/mandate/part2.md", "sha256": "e5492b299a33a86cf938b6439f8cb023f50ee2ceffa94b5ea59cb77316551977", "status": "placeholder", "scope": "Track C (40 checks), Definition of Done"}
+  ],
+  "combined_mandate": {"path": "governance/mandate.md", "sha256": "bdeeb3843ff80eee2baa14e1244910c33cf7f99958666fea41380358ec3b7652"},
+  "concatenation_rule": "part1.md + '\n---\n' + part2.md",
+  "required_check_ids_count": 119,
+  "active_check_ids_count": 79
+}

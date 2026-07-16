@@ -104,6 +104,14 @@ DEFAULTS = {
         "rebalance_delta": 0.05,      # only act when allocation is off by more than this
         "min_trade_value": 10.0,      # skip trades below this quote value
         "dust_threshold": 10.0,       # sweep balances below this quote value
+        # Blast-radius cap on the irreversible money-moving capability. A single
+        # swap worth more than max_swap_value is clamped down; when a swap would
+        # push the rolling 24h traded quote value over daily_trade_cap the swap is
+        # refused and the engine auto-halts (latches off until Start is pressed).
+        # Set either to 0 to disable it. Raise them deliberately once you trust
+        # the behaviour -- the defaults are intentionally conservative.
+        "max_swap_value": 1000.0,
+        "daily_trade_cap": 5000.0,
         "analysis_interval": "30m",
         # How long cached TA/LLM responses stay valid in dry-run (seconds).
         "cache_max_age": 1800,
@@ -112,12 +120,18 @@ DEFAULTS = {
         # assets that get sold in a bearish market; "preferred" biases the
         # pairwise LLM comparison. Assets NOT listed here are never touched.
         "assets": {
-            "BTC":  {"symbol": "BTCUSD",  "screener_exchange": "BINANCE", "preferred": False, "crypto": True},
-            "ETH":  {"symbol": "ETHUSD",  "screener_exchange": "BINANCE", "preferred": False, "crypto": True},
-            "PAXG": {"symbol": "PAXGUSD", "screener_exchange": "BINANCE", "preferred": True,  "crypto": True},
-            "BNB":  {"symbol": "BNBUSD",  "screener_exchange": "BINANCE", "preferred": True,  "crypto": True},
-            "AAVE": {"symbol": "AAVEUSD", "screener_exchange": "BINANCE", "preferred": True,  "crypto": True},
-            "USDT": {"symbol": "USDTEUR", "screener_exchange": "COINBASE", "preferred": True, "crypto": False},
+            "BTC":  {"symbol": "BTCUSD",  "screener_exchange": "BINANCE",
+                     "preferred": False, "crypto": True},
+            "ETH":  {"symbol": "ETHUSD",  "screener_exchange": "BINANCE",
+                     "preferred": False, "crypto": True},
+            "PAXG": {"symbol": "PAXGUSD", "screener_exchange": "BINANCE",
+                     "preferred": True,  "crypto": True},
+            "BNB":  {"symbol": "BNBUSD",  "screener_exchange": "BINANCE",
+                     "preferred": True,  "crypto": True},
+            "AAVE": {"symbol": "AAVEUSD", "screener_exchange": "BINANCE",
+                     "preferred": True,  "crypto": True},
+            "USDT": {"symbol": "USDTEUR", "screener_exchange": "COINBASE",
+                     "preferred": True,  "crypto": False},
         },
     },
     "schedule": {
