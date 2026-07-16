@@ -7,28 +7,32 @@ the dashboard shows.
 import threading
 import time
 from collections import deque
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .exchanges.base import SwapResult
 
 MAX_EVENTS = 300
 
 
 class EngineState:
-    def __init__(self):
+    def __init__(self) -> None:
         self._lock = threading.RLock()
-        self._events = deque(maxlen=MAX_EVENTS)
-        self.engine_running = False
-        self.current_job = None
-        self.last_error = None
-        self.balances = []            # list of Balance.to_dict()
-        self.total_value = 0.0
-        self.loan_balance = 0.0
-        self.market_evaluation = {}   # last LLM market sentiment
-        self.recommendations = []     # last pairwise LLM results
-        self.target_distribution = [] # [(asset, pct), ...]
-        self.last_refresh = None
-        self.last_rebalance = None
-        self.swap_history = deque(maxlen=100)
+        self._events: deque[dict[str, Any]] = deque(maxlen=MAX_EVENTS)
+        self.engine_running: bool = False
+        self.current_job: str | None = None
+        self.last_error: str | None = None
+        self.balances: list[dict[str, Any]] = []       # list of Balance.to_dict()
+        self.total_value: float = 0.0
+        self.loan_balance: float = 0.0
+        self.market_evaluation: dict[str, Any] = {}    # last LLM market sentiment
+        self.recommendations: list[dict[str, Any]] = []  # last pairwise LLM results
+        self.target_distribution: list[tuple[str, float]] = []  # [(asset, pct), ...]
+        self.last_refresh: float | None = None
+        self.last_rebalance: float | None = None
+        self.swap_history: deque[dict[str, Any]] = deque(maxlen=100)
 
-    def log(self, message, level="info", **details):
+    def log(self, message: str, level: str = "info", **details: Any) -> None:
         with self._lock:
             self._events.appendleft({
                 "ts": time.time(),
@@ -37,16 +41,16 @@ class EngineState:
                 **({"details": details} if details else {}),
             })
 
-    def record_swap(self, swap_result):
+    def record_swap(self, swap_result: "SwapResult") -> None:
         with self._lock:
             self.swap_history.appendleft({"ts": time.time(), **swap_result.to_dict()})
 
-    def set(self, **kwargs):
+    def set(self, **kwargs: Any) -> None:
         with self._lock:
             for key, value in kwargs.items():
                 setattr(self, key, value)
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         with self._lock:
             return {
                 "engine_running": self.engine_running,

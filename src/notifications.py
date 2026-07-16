@@ -5,15 +5,19 @@ unconfigured, and are never sent from dry-run mode.
 """
 
 import logging
+from typing import TYPE_CHECKING
 
 import requests
+
+if TYPE_CHECKING:
+    from .settings import Settings
 
 log = logging.getLogger(__name__)
 
 SIPGATE_SMS_URL = "https://api.sipgate.com/v2/sessions/sms"
 
 
-def send_sms_alert(settings, message):
+def send_sms_alert(settings: "Settings", message: str) -> bool:
     cfg = settings.get("sms", {})
     if not cfg.get("enabled") or not cfg.get("auth_token") or not cfg.get("recipient"):
         log.debug("SMS alert skipped (disabled or unconfigured): %s", message)

@@ -14,9 +14,14 @@ import json
 import logging
 import re
 import time
+from collections.abc import Iterable, Mapping
+from typing import TYPE_CHECKING, Any
 
 from .cache import cached_response
 from .prompts import market_evaluation_prompt, swap_analysis_prompt
+
+if TYPE_CHECKING:
+    from .settings import Settings
 
 log = logging.getLogger(__name__)
 
@@ -27,7 +32,7 @@ VALID_ACTIONS = ("sell_buy", "buy", "sell", "hold")
 VALID_SENTIMENTS = ("bullish", "bearish", "neutral")
 
 
-def _parse_json(text):
+def _parse_json(text: str) -> Any:
     """Extract a JSON object from an LLM response, tolerating code fences
     and surrounding prose."""
     text = re.sub(r"```(?:json)?", "", text, flags=re.IGNORECASE).strip()
@@ -41,13 +46,13 @@ def _parse_json(text):
 
 
 class LLMClient:
-    def __init__(self, settings):
+    def __init__(self, settings: "Settings") -> None:
         self._settings = settings
         self._last_primary_failure = 0.0
 
     # -- providers -----------------------------------------------------------
 
-    def _anthropic_completion(self, prompt):
+    def _anthropic_completion(self, prompt: str) -> str:
         import anthropic
 
         cfg = self._settings.get("llm", {})
@@ -63,7 +68,7 @@ class LLMClient:
         )
         return response.content[0].text
 
-    def _openai_completion(self, prompt):
+    def _openai_completion(self, prompt: str) -> str:
         import openai
 
         cfg = self._settings.get("llm", {})
@@ -80,12 +85,12 @@ class LLMClient:
         return response.choices[0].message.content
 
     @property
-    def current_provider(self):
+    def current_provider(self) -> str:
         if time.time() - self._last_primary_failure < FALLBACK_COOLDOWN:
             return "openai"
         return "anthropic"
 
-    def create_completion(self, prompt):
+    def create_completion(self, prompt: str) -> str:
         if self.current_provider == "anthropic":
             try:
                 return self._anthropic_completion(prompt)
@@ -108,8 +113,15 @@ class LLMClient:
 
     # -- high-level evaluations ------------------------------------------------
 
-    def crypto_swap_evaluation(self, asset_a, asset_b, analysis, preferred,
-                               use_cache=False, cache_max_age=1800):
+    def crypto_swap_evaluation(
+        self,
+        asset_a: str,
+        asset_b: str,
+        analysis: Mapping[str, Any],
+        preferred: str | None,
+        use_cache: bool = False,
+        cache_max_age: float = 1800,
+    ) -> dict[str, Any]:
         prompt = swap_analysis_prompt(asset_a, asset_b, preferred, analysis)
         try:
             raw = cached_response(
@@ -143,8 +155,13 @@ class LLMClient:
                       asset_a, asset_b, exc)
             return {"error": str(exc), "assets": [asset_a, asset_b]}
 
-    def market_evaluation(self, statements, buyable_crypto, use_cache=False,
-                          cache_max_age=1800):
+    def market_evaluation(
+        self,
+        statements: Iterable[str],
+        buyable_crypto: Iterable[str],
+        use_cache: bool = False,
+        cache_max_age: float = 1800,
+    ) -> dict[str, Any]:
         prompt = market_evaluation_prompt("".join(statements), buyable_crypto)
         try:
             raw = cached_response(

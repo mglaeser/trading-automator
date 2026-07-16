@@ -1,9 +1,14 @@
+from typing import TYPE_CHECKING
+
 from .base import Balance, ExchangeClient, ExchangeError
 from .binance_client import BinanceClient
 from .etoro_client import EToroClient
 
+if TYPE_CHECKING:
+    from ..settings import Settings
 
-def create_client(settings, dry_run=None):
+
+def create_client(settings: "Settings", dry_run: bool | None = None) -> ExchangeClient:
     """Build the exchange client selected in settings."""
     name = settings.get("exchange", "binance").lower()
     if dry_run is None:

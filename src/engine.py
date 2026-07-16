@@ -28,23 +28,31 @@ import logging
 import threading
 import time
 from collections import deque
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from .analysis import evaluate_crypto_analysis, get_buyable_cryptos, get_crypto_analysis
 from .exchanges import ExchangeError, create_client
+from .exchanges.base import Balance, ExchangeClient, SwapResult
 from .llm import LLMClient
 from .notifications import send_sms_alert
 from .scheduler import Scheduler
 from .state import EngineState
 
+if TYPE_CHECKING:
+    from .settings import Settings
+
 log = logging.getLogger(__name__)
 
 
-def round_down(number, decimals=2):
+def round_down(number: float, decimals: int = 2) -> float:
     factor = 10 ** decimals
     return int(number * factor) / factor
 
 
-def asset_distribution_from_recommendation(recommendations, allocated_percentage=0.0):
+def asset_distribution_from_recommendation(
+    recommendations: list[dict[str, Any]], allocated_percentage: float = 0.0
+) -> list[tuple[str, float]]:
     """Convert pairwise LLM recommendations into portfolio weights.
 
     Scoring: sell_buy shifts one point of confidence from the first to the
@@ -56,7 +64,7 @@ def asset_distribution_from_recommendation(recommendations, allocated_percentage
     if not 0 <= allocated_percentage < 1:
         raise ValueError("allocated_percentage must be between 0 and 1")
 
-    scores = {}
+    scores: dict[str, float] = {}
     for rec in recommendations:
         if "error" in rec:
             continue
@@ -84,7 +92,7 @@ def asset_distribution_from_recommendation(recommendations, allocated_percentage
 
 
 class TradingEngine:
-    def __init__(self, settings, state=None):
+    def __init__(self, settings: "Settings", state: EngineState | None = None) -> None:
         self.settings = settings
         self.state = state or EngineState()
         self.llm = LLMClient(settings)
@@ -97,23 +105,23 @@ class TradingEngine:
         # Quote balance at the end of the previous rebalance cycle; baseline
         # for inflow detection. None until the first cycle completes, so the
         # engine's own cash reserve can never be mistaken for a deposit.
-        self._last_cycle_quote = None
+        self._last_cycle_quote: float | None = None
         # Rolling record of (timestamp, executed quote value) for the trading cap.
-        self._trade_window = deque()
+        self._trade_window: deque[tuple[float, float]] = deque()
 
     # -- helpers ---------------------------------------------------------------
 
     @property
-    def dry_run(self):
-        return self.settings.get("dry_run", True)
+    def dry_run(self) -> bool:
+        return bool(self.settings.get("dry_run", True))
 
-    def _client(self):
+    def _client(self) -> ExchangeClient:
         return create_client(self.settings, dry_run=self.dry_run)
 
-    def _trading(self, key, default=None):
+    def _trading(self, key: str, default: Any = None) -> Any:
         return self.settings.get(f"trading.{key}", default)
 
-    def _run_job(self, name, fn, scheduled=False):
+    def _run_job(self, name: str, fn: Callable[[], Any], scheduled: bool = False) -> None:
         """Run one job; concurrent triggers are skipped, never queued."""
         if scheduled and not self.state.engine_running:
             log.info("Scheduled job '%s' skipped: engine stopped", name)
@@ -138,13 +146,13 @@ class TradingEngine:
         finally:
             self._job_lock.release()
 
-    def _traded_last_24h(self):
+    def _traded_last_24h(self) -> float:
         cutoff = time.time() - 24 * 3600
         while self._trade_window and self._trade_window[0][0] < cutoff:
             self._trade_window.popleft()
         return sum(v for _, v in self._trade_window)
 
-    def _halt(self, reason):
+    def _halt(self, reason: str) -> None:
         """Trip the kill switch automatically: stop trading now, persist the
         stop so a restart does not resurrect the engine, and shut the scheduler
         down off-thread (a scheduled job runs on the scheduler thread, so it
@@ -161,7 +169,9 @@ class TradingEngine:
         threading.Thread(target=self.scheduler.stop, daemon=True,
                          name="auto-halt").start()
 
-    def _swap(self, client, from_asset, to_asset, amount):
+    def _swap(
+        self, client: ExchangeClient, from_asset: str, to_asset: str, amount: float
+    ) -> SwapResult:
         # Blast-radius cap at the single trade chokepoint (A-11/A-34/A-35/B-08).
         max_swap = float(self._trading("max_swap_value", 0.0) or 0.0)
         daily_cap = float(self._trading("daily_trade_cap", 0.0) or 0.0)
@@ -194,26 +204,26 @@ class TradingEngine:
         return result
 
     @staticmethod
-    def _balance_map(balances):
+    def _balance_map(balances: list[Balance]) -> dict[str, Balance]:
         return {b.asset: b for b in balances}
 
     # -- jobs (public entry points; also used by the web UI) ---------------------
 
-    def refresh(self, scheduled=False):
+    def refresh(self, scheduled: bool = False) -> None:
         self._run_job("refresh", self._refresh, scheduled=scheduled)
 
-    def rebalance(self, scheduled=False):
+    def rebalance(self, scheduled: bool = False) -> None:
         self._run_job("rebalance", self._rebalance, scheduled=scheduled)
 
-    def repay(self, scheduled=False):
+    def repay(self, scheduled: bool = False) -> None:
         self._run_job("repay", self._repay, scheduled=scheduled)
 
-    def sweep_small_balances(self):
+    def sweep_small_balances(self) -> None:
         self._run_job("sweep", self._sweep)
 
     # -- refresh -----------------------------------------------------------------
 
-    def _refresh(self):
+    def _refresh(self) -> list[Balance]:
         client = self._client()
         balances = client.get_balances()
         loan = client.get_loan_balance()
@@ -231,7 +241,9 @@ class TradingEngine:
 
     # -- anchor asset target ---------------------------------------------------------
 
-    def maintain_anchor_target(self, client=None, balances=None):
+    def maintain_anchor_target(
+        self, client: ExchangeClient | None = None, balances: list[Balance] | None = None
+    ) -> bool:
         """Keep the anchor asset at its target portfolio share.
 
         The per-cycle adjustment is clamped to [anchor_swap_min,
@@ -283,6 +295,7 @@ class TradingEngine:
             amount_quote = swap_max
 
         if diff_quote < 0:
+            assert anchor_bal is not None  # diff_quote<0 reaches here only with a position
             native = anchor_bal.amount * (amount_quote / anchor_bal.quote_value)
             self._swap(client, anchor, quote, native)
         else:
@@ -291,7 +304,9 @@ class TradingEngine:
 
     # -- fiat inflow split -----------------------------------------------------------
 
-    def handle_inflow_split(self, client=None, balances=None):
+    def handle_inflow_split(
+        self, client: ExchangeClient | None = None, balances: list[Balance] | None = None
+    ) -> bool:
         """Buy a slice of the anchor asset from a fresh quote-asset deposit.
 
         Only the *increase* of the quote balance since the end of the last
@@ -327,7 +342,7 @@ class TradingEngine:
 
     # -- loan repayment (Binance margin) ---------------------------------------------
 
-    def _repay(self):
+    def _repay(self) -> None:
         client = self._client()
         loan = client.get_loan_balance()
         self.state.set(loan_balance=loan)
@@ -358,13 +373,13 @@ class TradingEngine:
 
     # -- LLM-driven rebalancing ------------------------------------------------------
 
-    def _sentiment_interval(self, sentiment):
+    def _sentiment_interval(self, sentiment: str) -> list[int]:
         window = self.settings.get(f"schedule.sentiment_rebalance.{sentiment}")
         defaults = {"bullish": [8, 13], "bearish": [45, 75], "neutral": [30, 45]}
         return window if isinstance(window, list) and len(window) == 2 \
             else defaults[sentiment]
 
-    def _rebalance(self):
+    def _rebalance(self) -> None:
         assets = self._trading("assets", {})
         interval = self._trading("analysis_interval", "30m")
         quote = self._trading("quote_asset", "USDT")
@@ -458,7 +473,12 @@ class TradingEngine:
 
     # -- rebalance to target weights -------------------------------------------------
 
-    def swap_to_target(self, client, balances, target_distribution):
+    def swap_to_target(
+        self,
+        client: ExchangeClient,
+        balances: list[Balance],
+        target_distribution: list[tuple[str, float]],
+    ) -> bool:
         """Move the portfolio towards the target weights.
 
         Sells run first and their (fee-discounted) proceeds fund the buys;
@@ -485,7 +505,7 @@ class TradingEngine:
             )
             targets = {a: p / target_sum for a, p in targets.items()}
 
-        adjustments = {}
+        adjustments: dict[str, float] = {}
         for asset, target_pct in targets.items():
             current_value = by_asset[asset].quote_value if asset in by_asset else 0.0
             current_pct = current_value / total
@@ -529,7 +549,9 @@ class TradingEngine:
 
     # -- bearish liquidation ---------------------------------------------------------
 
-    def sell_all_crypto(self, client=None, balances=None):
+    def sell_all_crypto(
+        self, client: ExchangeClient | None = None, balances: list[Balance] | None = None
+    ) -> bool:
         """Liquidate all *configured* crypto assets into the quote asset.
 
         Assets not in the configured universe (airdrops, staking rewards,
@@ -558,7 +580,7 @@ class TradingEngine:
 
     # -- dust sweep ------------------------------------------------------------------
 
-    def _sweep(self):
+    def _sweep(self) -> None:
         client = self._client()
         quote = self._trading("quote_asset", "USDT")
         assets = self._trading("assets", {})
@@ -581,7 +603,7 @@ class TradingEngine:
 
     # -- lifecycle -----------------------------------------------------------------------
 
-    def start(self):
+    def start(self) -> None:
         with self._lifecycle_lock:
             if self.state.engine_running:
                 return
@@ -597,12 +619,12 @@ class TradingEngine:
         threading.Thread(target=self._initial_pass, daemon=True,
                          name="initial-pass").start()
 
-    def _initial_pass(self):
+    def _initial_pass(self) -> None:
         # errors are logged and surfaced by _run_job
         self.refresh(scheduled=True)
         self.rebalance(scheduled=True)
 
-    def stop(self):
+    def stop(self) -> None:
         with self._lifecycle_lock:
             if not self.state.engine_running:
                 return

@@ -73,8 +73,8 @@ def main():
         return 1
     print(f"POLICY GATE ({mode}): PASS")
     if not deploy:
-        print("  (note: production admission still blocked -- Part 2 security scope "
-              "unaudited; run with --deploy to confirm.)")
+        print("  (note: production admission still blocked on the structural residuals "
+              "R-2/R-3; run with --deploy to confirm.)")
     return 0
 
 

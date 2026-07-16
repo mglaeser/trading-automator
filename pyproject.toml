@@ -35,6 +35,27 @@ select = [
 # them would inject newlines into the prompt sent to the model.
 "src/prompts.py" = ["E501"]
 
+[tool.mypy]
+# Static type gate (state-of-the-art best practice). Behaviour-preserving:
+# annotations are inert at runtime; the test suite + mutation smoke remain the
+# characterisation net. disallow_untyped_defs gives the gate teeth — a new
+# unannotated function fails it. Strictness ratchets up over time, never down.
+python_version = "3.11"
+files = ["src"]
+ignore_missing_imports = true      # third-party libs ship no stubs; not our concern
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true
+
+# Do not type-check against third-party SDK internals — treat them as untyped.
+# We check OUR logic; the vendor libraries are exercised by the test suite.
+[[tool.mypy.overrides]]
+module = ["anthropic.*", "openai.*", "tradingview_ta.*", "astral.*", "pytz.*", "uvicorn.*"]
+follow_imports = "skip"
+follow_imports_for_stubs = true
+
 [tool.mutmut]
 # Mutation testing is the meta-gate (A-02): the suite must detect injected faults.
 # Scoped to the decision core, where a surviving mutant means the net has a hole.

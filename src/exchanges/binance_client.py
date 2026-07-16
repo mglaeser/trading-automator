@@ -27,6 +27,7 @@ import hmac
 import logging
 import time
 from decimal import ROUND_DOWN, Decimal
+from typing import Any
 from urllib.parse import urlencode
 
 import requests
@@ -38,7 +39,7 @@ log = logging.getLogger(__name__)
 STABLE_ALIASES = {"USDT", "USDC", "FDUSD", "TUSD", "BUSD"}
 
 
-def _fmt_qty(value):
+def _fmt_qty(value: float) -> str:
     """Format a quantity for the API without scientific notation."""
     return f"{value:.8f}".rstrip("0").rstrip(".")
 
@@ -46,8 +47,16 @@ def _fmt_qty(value):
 class BinanceClient(ExchangeClient):
     name = "binance"
 
-    def __init__(self, api_key, api_secret, base_url="https://api.binance.com",
-                 quote_asset="USDT", dry_run=True, recv_window=5000, timeout=15):
+    def __init__(
+        self,
+        api_key: str,
+        api_secret: str,
+        base_url: str = "https://api.binance.com",
+        quote_asset: str = "USDT",
+        dry_run: bool = True,
+        recv_window: int = 5000,
+        timeout: float = 15,
+    ) -> None:
         super().__init__(quote_asset=quote_asset, dry_run=dry_run)
         self.api_key = api_key
         self.api_secret = api_secret
@@ -56,13 +65,17 @@ class BinanceClient(ExchangeClient):
         self.timeout = timeout
         self._session = requests.Session()
         self._session.headers.update({"X-MBX-APIKEY": api_key})
-        self._symbols = None          # cache of exchangeInfo
+        # cache of exchangeInfo: (base, quote) -> filter metadata
+        self._symbols: dict[tuple[str, str], dict[str, Any]] | None = None
         self._symbols_fetched = 0.0
-        self._unpriced_warned = set()  # assets we already warned about
+        self._unpriced_warned: set[str] = set()  # assets we already warned about
 
     # -- low level ---------------------------------------------------------
 
-    def _request(self, method, path, params=None, signed=False):
+    def _request(
+        self, method: str, path: str,
+        params: dict[str, Any] | None = None, signed: bool = False,
+    ) -> Any:
         params = dict(params or {})
         if signed:
             if not self.api_key or not self.api_secret:
@@ -95,7 +108,7 @@ class BinanceClient(ExchangeClient):
 
     # -- symbols / filters ---------------------------------------------------
 
-    def _exchange_info(self):
+    def _exchange_info(self) -> dict[tuple[str, str], dict[str, Any]]:
         # refresh symbol cache at most every 6 hours
         if self._symbols is None or time.time() - self._symbols_fetched > 6 * 3600:
             data = self._request("GET", "/api/v3/exchangeInfo")
@@ -118,11 +131,11 @@ class BinanceClient(ExchangeClient):
             self._symbols_fetched = time.time()
         return self._symbols
 
-    def _find_symbol(self, base, quote):
+    def _find_symbol(self, base: str, quote: str) -> dict[str, Any] | None:
         return self._exchange_info().get((base, quote))
 
     @staticmethod
-    def _round_step(quantity, step):
+    def _round_step(quantity: float, step: float) -> float:
         """Quantise down to the pair's LOT_SIZE step (Decimal: exact)."""
         if not step:
             return quantity
@@ -130,7 +143,7 @@ class BinanceClient(ExchangeClient):
         return float((q / s).to_integral_value(rounding=ROUND_DOWN) * s)
 
     @staticmethod
-    def _check_notional(info, notional):
+    def _check_notional(info: dict[str, Any], notional: float) -> None:
         """Fail fast when an order would violate the pair's minimum value."""
         minimum = info.get("min_notional") or 0.0
         if minimum and notional < minimum:
@@ -139,7 +152,7 @@ class BinanceClient(ExchangeClient):
                 f"is below the exchange minimum of {minimum:g}"
             )
 
-    def _free_balance(self, asset):
+    def _free_balance(self, asset: str) -> float:
         acct = self._request("GET", "/api/v3/account", signed=True)
         for entry in acct.get("balances", []):
             if entry["asset"] == asset:
@@ -148,17 +161,17 @@ class BinanceClient(ExchangeClient):
 
     # -- ExchangeClient ------------------------------------------------------
 
-    def test_connection(self):
+    def test_connection(self) -> str:
         self._request("GET", "/api/v3/ping")
         acct = self._request("GET", "/api/v3/account", signed=True)
         perms = ",".join(acct.get("permissions", [])) or "unknown"
         return f"Binance OK (account permissions: {perms})"
 
-    def _price_map(self):
+    def _price_map(self) -> dict[str, float]:
         tickers = self._request("GET", "/api/v3/ticker/price")
         return {t["symbol"]: float(t["price"]) for t in tickers}
 
-    def get_price(self, asset, quote=None):
+    def get_price(self, asset: str, quote: str | None = None) -> float:
         quote = quote or self.quote_asset
         if asset == quote or (asset in STABLE_ALIASES and quote in STABLE_ALIASES):
             return 1.0
@@ -172,11 +185,11 @@ class BinanceClient(ExchangeClient):
             return prices[asset + "USDT"] / prices[quote + "USDT"]
         raise ExchangeError(f"No price route for {asset}/{quote}")
 
-    def get_balances(self, min_quote_value=0.01):
+    def get_balances(self, min_quote_value: float = 0.01) -> list[Balance]:
         acct = self._request("GET", "/api/v3/account", signed=True)
         prices = self._price_map()
 
-        def value_of(asset, amount):
+        def value_of(asset: str, amount: float) -> float:
             if asset == self.quote_asset:
                 return amount
             sym = asset + self.quote_asset
@@ -193,7 +206,7 @@ class BinanceClient(ExchangeClient):
                             "excluding it from the portfolio value", asset, amount)
             return 0.0
 
-        balances = []
+        balances: list[Balance] = []
         for entry in acct.get("balances", []):
             amount = float(entry["free"]) + float(entry["locked"])
             if amount <= 0:
@@ -204,8 +217,11 @@ class BinanceClient(ExchangeClient):
         balances.sort(key=lambda b: b.quote_value, reverse=True)
         return add_percentages(balances)
 
-    def _market_order(self, symbol_info, side, quantity=None, quote_qty=None):
-        params = {"symbol": symbol_info["symbol"], "side": side, "type": "MARKET"}
+    def _market_order(
+        self, symbol_info: dict[str, Any], side: str,
+        quantity: float | None = None, quote_qty: float | None = None,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {"symbol": symbol_info["symbol"], "side": side, "type": "MARKET"}
         if quantity is not None:
             qty = self._round_step(quantity, symbol_info["step"])
             if qty <= 0:
@@ -214,6 +230,7 @@ class BinanceClient(ExchangeClient):
                 )
             params["quantity"] = _fmt_qty(qty)
         else:
+            assert quote_qty is not None  # caller supplies exactly one leg
             params["quoteOrderQty"] = _fmt_qty(quote_qty)
 
         if self.dry_run:
@@ -221,7 +238,7 @@ class BinanceClient(ExchangeClient):
             return {"dry_run": True, **params}
         return self._request("POST", "/api/v3/order", params=params, signed=True)
 
-    def swap(self, from_asset, to_asset, amount):
+    def swap(self, from_asset: str, to_asset: str, amount: float) -> SwapResult:
         """Market-convert from_asset -> to_asset.
 
         Uses a direct trading pair when one exists, otherwise routes through
@@ -240,7 +257,7 @@ class BinanceClient(ExchangeClient):
             amount = min(amount, free)
 
         quote_value = amount * self.get_price(from_asset)
-        orders = []
+        orders: list[Any] = []
 
         direct = self._find_symbol(from_asset, to_asset)
         reverse = self._find_symbol(to_asset, from_asset)
@@ -271,7 +288,7 @@ class BinanceClient(ExchangeClient):
 
     # -- margin loan ---------------------------------------------------------
 
-    def get_loan_balance(self):
+    def get_loan_balance(self) -> float:
         try:
             margin = self._request("GET", "/sapi/v1/margin/account", signed=True)
         except ExchangeError as exc:
@@ -287,7 +304,7 @@ class BinanceClient(ExchangeClient):
                                  else self.get_price(entry["asset"]))
         return total
 
-    def repay_loan(self, asset, amount=None):
+    def repay_loan(self, asset: str, amount: float | None = None) -> dict[str, Any]:
         margin = self._request("GET", "/sapi/v1/margin/account", signed=True)
         entry = next((e for e in margin.get("userAssets", [])
                       if e["asset"] == asset), None)
@@ -298,7 +315,7 @@ class BinanceClient(ExchangeClient):
         repay = min(borrowed, free) if amount is None else min(amount, borrowed, free)
         if repay <= 0:
             return {"repaid": 0.0, "asset": asset}
-        params = {
+        params: dict[str, Any] = {
             "asset": asset,
             "amount": f"{repay:.8f}",
             "isIsolated": "FALSE",

@@ -1,7 +1,12 @@
 """LLM prompt templates."""
 
+from collections.abc import Iterable, Mapping
+from typing import Any
 
-def swap_analysis_prompt(asset_a, asset_b, asset_preferred, analysis):
+
+def swap_analysis_prompt(
+    asset_a: str, asset_b: str, asset_preferred: str | None, analysis: Mapping[str, Any]
+) -> str:
     preferred_text = (
         f"If {asset_preferred} is a stronger buy, set the confidence to 1.0."
         if asset_preferred
@@ -39,7 +44,7 @@ Determine the best action based on the provided analyses. Ensure your response f
 """
 
 
-def market_evaluation_prompt(market_statements, buyable_crypto):
+def market_evaluation_prompt(market_statements: str, buyable_crypto: Iterable[str]) -> str:
     options = '" or "'.join(map(str, buyable_crypto))
     return f"""### Instructions
 Carefully analyze the market statements below and determine the overall crypto market sentiment.

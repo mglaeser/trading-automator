@@ -18,6 +18,7 @@ in the settings if eToro migrates versions.
 
 import logging
 import uuid
+from typing import Any
 
 import requests
 
@@ -29,19 +30,27 @@ log = logging.getLogger(__name__)
 class EToroClient(ExchangeClient):
     name = "etoro"
 
-    def __init__(self, api_key, user_key, base_url="https://api.etoro.com",
-                 quote_asset="USDT", dry_run=True, timeout=20):
+    def __init__(
+        self,
+        api_key: str,
+        user_key: str,
+        base_url: str = "https://api.etoro.com",
+        quote_asset: str = "USDT",
+        dry_run: bool = True,
+        timeout: float = 20,
+    ) -> None:
         super().__init__(quote_asset=quote_asset, dry_run=dry_run)
         self.api_key = api_key
         self.user_key = user_key
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self._session = requests.Session()
-        self._instruments = None  # symbol -> instrument metadata
+        # ticker -> instrument metadata
+        self._instruments: dict[str, Any] | None = None
 
     # -- low level ---------------------------------------------------------
 
-    def _headers(self):
+    def _headers(self) -> dict[str, str]:
         if not self.api_key:
             raise ExchangeError("eToro API key not configured")
         return {
@@ -51,7 +60,10 @@ class EToroClient(ExchangeClient):
             "Content-Type": "application/json",
         }
 
-    def _request(self, method, path, params=None, json_body=None):
+    def _request(
+        self, method: str, path: str,
+        params: dict[str, Any] | None = None, json_body: dict[str, Any] | None = None,
+    ) -> Any:
         try:
             resp = self._session.request(
                 method,
@@ -71,7 +83,7 @@ class EToroClient(ExchangeClient):
 
     # -- instruments ---------------------------------------------------------
 
-    def _instrument_map(self):
+    def _instrument_map(self) -> dict[str, Any]:
         """Map ticker (e.g. 'BTC') -> instrument metadata."""
         if self._instruments is None:
             data = self._request(
@@ -85,7 +97,7 @@ class EToroClient(ExchangeClient):
                     self._instruments[ticker] = item
         return self._instruments
 
-    def _instrument_id(self, asset):
+    def _instrument_id(self, asset: str) -> Any:
         info = self._instrument_map().get(asset.upper())
         if not info:
             raise ExchangeError(f"eToro: no instrument found for '{asset}'")
@@ -93,12 +105,12 @@ class EToroClient(ExchangeClient):
 
     # -- ExchangeClient ------------------------------------------------------
 
-    def test_connection(self):
+    def test_connection(self) -> str:
         info = self._request("GET", "/API/User/V1/Info")
         username = info.get("Username") or info.get("username") or "account"
         return f"eToro OK (user: {username})"
 
-    def get_price(self, asset, quote=None):
+    def get_price(self, asset: str, quote: str | None = None) -> float:
         quote = quote or self.quote_asset
         if asset == quote:
             return 1.0
@@ -118,7 +130,7 @@ class EToroClient(ExchangeClient):
             raise ExchangeError(f"eToro: empty rate for {asset}")
         return price  # eToro rates are USD; treated 1:1 against USD-stables
 
-    def get_balances(self, min_quote_value=0.01):
+    def get_balances(self, min_quote_value: float = 0.01) -> list[Balance]:
         # Cash balance
         credit = self._request("GET", "/API/User/V1/Credit")
         cash = float(credit.get("Credit", credit.get("credit", 0)) or 0)
@@ -129,14 +141,14 @@ class EToroClient(ExchangeClient):
         by_id = {v.get("InstrumentID") or v.get("InstrumentId"): k
                  for k, v in self._instrument_map().items()}
 
-        totals = {}
+        totals: dict[str, float] = {}
         for pos in positions:
             iid = pos.get("InstrumentID") or pos.get("InstrumentId")
             asset = by_id.get(iid, f"ID{iid}")
             units = float(pos.get("Units", pos.get("units", 0)) or 0)
             totals[asset] = totals.get(asset, 0.0) + units
 
-        balances = []
+        balances: list[Balance] = []
         if cash >= min_quote_value:
             balances.append(Balance(self.quote_asset, cash, cash))
         for asset, units in totals.items():
@@ -151,8 +163,8 @@ class EToroClient(ExchangeClient):
 
     # -- position helpers ------------------------------------------------------
 
-    def _open_position(self, asset, quote_amount):
-        payload = {
+    def _open_position(self, asset: str, quote_amount: float) -> dict[str, Any]:
+        payload: dict[str, Any] = {
             "InstrumentID": self._instrument_id(asset),
             "IsBuy": True,
             "Leverage": 1,
@@ -163,7 +175,7 @@ class EToroClient(ExchangeClient):
             return {"dry_run": True, **payload}
         return self._request("POST", "/API/User/V1/Positions", json_body=payload)
 
-    def _close_positions(self, asset, units_to_close):
+    def _close_positions(self, asset: str, units_to_close: float) -> list[Any]:
         """Free ~units_to_close units of ``asset`` by closing whole positions.
 
         eToro's API can only close entire positions, so the request is
@@ -175,7 +187,7 @@ class EToroClient(ExchangeClient):
         positions = portfolio.get("Positions", portfolio.get("positions", []) or [])
         target_id = self._instrument_id(asset)
 
-        matching = []
+        matching: list[tuple[float, Any]] = []
         for pos in positions:
             iid = pos.get("InstrumentID") or pos.get("InstrumentId")
             if iid != target_id:
@@ -187,7 +199,8 @@ class EToroClient(ExchangeClient):
             raise ExchangeError(f"eToro: no open positions in {asset} to close")
         matching.sort()  # smallest first -> minimal overshoot
 
-        results, closed = [], 0.0
+        results: list[Any] = []
+        closed = 0.0
         for units, pos_id in matching:
             if closed >= units_to_close:
                 break
@@ -212,9 +225,9 @@ class EToroClient(ExchangeClient):
                 results.append(self._open_position(asset, excess_value))
         return results
 
-    def swap(self, from_asset, to_asset, amount):
+    def swap(self, from_asset: str, to_asset: str, amount: float) -> SwapResult:
         quote_value = amount * self.get_price(from_asset)
-        orders = []
+        orders: list[Any] = []
         if from_asset == self.quote_asset:
             orders.append(self._open_position(to_asset, amount))
         elif to_asset == self.quote_asset:

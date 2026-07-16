@@ -30,6 +30,9 @@ jobs:
       - name: Lint (ruff) — A-08/A-13/A-26
         run: python -m ruff check src tests
 
+      - name: Static types (mypy) — A-08/A-13/S4
+        run: python -m mypy src
+
       - name: Tests (pytest) — A-02 backstop
         run: python -m pytest -q
 

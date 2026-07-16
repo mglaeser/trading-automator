@@ -6,6 +6,7 @@ Binance and eToro (and future exchanges) are interchangeable.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from typing import Any
 
 
 class ExchangeError(RuntimeError):
@@ -21,7 +22,7 @@ class Balance:
     quote_value: float            # value in the quote asset
     percentage: float = 0.0      # share of total portfolio value
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         return {
             "asset": self.asset,
             "amount": self.amount,
@@ -37,9 +38,9 @@ class SwapResult:
     amount: float                 # native units of from_asset
     quote_value: float
     dry_run: bool
-    orders: list = field(default_factory=list)
+    orders: list[Any] = field(default_factory=list)
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         return {
             "from_asset": self.from_asset,
             "to_asset": self.to_asset,
@@ -50,7 +51,7 @@ class SwapResult:
         }
 
 
-def add_percentages(balances):
+def add_percentages(balances: list[Balance]) -> list[Balance]:
     """Fill in the portfolio share of each balance."""
     total = sum(b.quote_value for b in balances)
     for b in balances:
@@ -63,31 +64,31 @@ class ExchangeClient(ABC):
 
     name = "abstract"
 
-    def __init__(self, quote_asset="USDT", dry_run=True):
+    def __init__(self, quote_asset: str = "USDT", dry_run: bool = True) -> None:
         self.quote_asset = quote_asset
         self.dry_run = dry_run
 
     # -- account ----------------------------------------------------------
 
     @abstractmethod
-    def test_connection(self):
+    def test_connection(self) -> str:
         """Return a short human-readable string on success, raise on failure."""
 
     @abstractmethod
-    def get_balances(self, min_quote_value=0.01):
+    def get_balances(self, min_quote_value: float = 0.01) -> list[Balance]:
         """Return list[Balance] for all assets above the given quote value,
         with percentages filled in."""
 
     # -- market data ------------------------------------------------------
 
     @abstractmethod
-    def get_price(self, asset, quote=None):
+    def get_price(self, asset: str, quote: str | None = None) -> float:
         """Price of one unit of ``asset`` in ``quote`` (default: quote_asset)."""
 
     # -- trading ----------------------------------------------------------
 
     @abstractmethod
-    def swap(self, from_asset, to_asset, amount):
+    def swap(self, from_asset: str, to_asset: str, amount: float) -> SwapResult:
         """Convert ``amount`` native units of from_asset into to_asset.
 
         Returns SwapResult. Implementations must honour ``self.dry_run``.
@@ -95,11 +96,11 @@ class ExchangeClient(ABC):
 
     # -- credit (optional) --------------------------------------------------
 
-    def get_loan_balance(self):
+    def get_loan_balance(self) -> float:
         """Outstanding borrowed amount in quote asset. 0.0 when unsupported."""
         return 0.0
 
-    def repay_loan(self, asset, amount=None):
+    def repay_loan(self, asset: str, amount: float | None = None) -> dict[str, Any]:
         """Repay an outstanding loan with ``asset`` (None = repay maximum).
 
         Raises ExchangeError when the exchange has no credit facility.

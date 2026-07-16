@@ -6,15 +6,20 @@ rule-based recommendation that feeds the LLM evaluation.
 """
 
 import logging
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any
 
 from tradingview_ta import TA_Handler
 
 from .cache import cached_response
 
+if TYPE_CHECKING:
+    from .llm import LLMClient
+
 log = logging.getLogger(__name__)
 
 
-def calculate_fibonacci_levels(high, low):
+def calculate_fibonacci_levels(high: float, low: float) -> dict[str, float]:
     diff = high - low
     return {
         "0": low,
@@ -27,7 +32,7 @@ def calculate_fibonacci_levels(high, low):
     }
 
 
-def get_recommendation(analysis):
+def get_recommendation(analysis: Mapping[str, Any]) -> str:
     rsi = analysis["RSI"]
     macd_hist = analysis["MACD"]["Histogram"]
     stoch_k = analysis["Stochastic"]["K"]
@@ -44,7 +49,9 @@ def get_recommendation(analysis):
     return "Neutral"
 
 
-def _refine(indicators, symbol, screener_exchange, interval):
+def _refine(
+    indicators: Mapping[str, Any], symbol: str, screener_exchange: str, interval: str
+) -> dict[str, Any]:
     rsi = indicators["RSI"]
     macd = indicators["MACD.macd"]
     macd_signal = indicators["MACD.signal"]
@@ -58,7 +65,7 @@ def _refine(indicators, symbol, screener_exchange, interval):
     macd_diff = macd - macd_signal
     sign = 1 if macd_diff > 0 else -1 if macd_diff < 0 else 0
 
-    refined = {
+    refined: dict[str, Any] = {
         "RSI": rsi,
         "MACD": {"MACD": macd, "Signal": macd_signal, "Histogram": macd_diff},
         "Bollinger_Bands": {
@@ -84,15 +91,19 @@ def _refine(indicators, symbol, screener_exchange, interval):
     return refined
 
 
-def get_crypto_analysis(assets, interval="30m", use_cache=False,
-                        cache_max_age=1800):
+def get_crypto_analysis(
+    assets: Mapping[str, Mapping[str, Any]],
+    interval: str = "30m",
+    use_cache: bool = False,
+    cache_max_age: float = 1800,
+) -> dict[str, dict[str, Any]]:
     """Analyse every asset in the configured universe.
 
     ``assets`` is the settings dict: {ticker: {symbol, screener_exchange, ...}}.
     Returns {ticker: refined_analysis}; failed tickers are omitted (the
     engine refuses to trade when any buyable asset is missing).
     """
-    results = {}
+    results: dict[str, dict[str, Any]] = {}
     for ticker, details in assets.items():
         try:
             handler = TA_Handler(
@@ -103,7 +114,8 @@ def get_crypto_analysis(assets, interval="30m", use_cache=False,
             )
             analysis = cached_response(
                 f"{details['symbol']}_analysis",
-                lambda h=handler: h.get_analysis().indicators,
+                # h=handler binds the loop variable (ruff B023); called synchronously.
+                lambda h=handler: h.get_analysis().indicators,  # type: ignore[misc]
                 enabled=use_cache,
                 max_age=cache_max_age,
             )
@@ -116,14 +128,14 @@ def get_crypto_analysis(assets, interval="30m", use_cache=False,
     return results
 
 
-def generate_swap_summaries(recommendations):
+def generate_swap_summaries(recommendations: list[dict[str, Any]]) -> list[str]:
     templates = {
         "sell_buy": "Sell {0} to buy {1}",
         "buy": "Buy {0} and {1}",
         "sell": "Sell {0} and {1}",
         "hold": "Hold {0} and {1}",
     }
-    summaries = []
+    summaries: list[str] = []
     for rec in recommendations:
         if "error" in rec:
             continue
@@ -135,10 +147,15 @@ def generate_swap_summaries(recommendations):
     return summaries
 
 
-def evaluate_crypto_analysis(analytics, assets, llm_client, use_cache=False,
-                            cache_max_age=1800):
+def evaluate_crypto_analysis(
+    analytics: Mapping[str, Any],
+    assets: Mapping[str, Mapping[str, Any]],
+    llm_client: "LLMClient",
+    use_cache: bool = False,
+    cache_max_age: float = 1800,
+) -> tuple[list[dict[str, Any]], list[str]]:
     """Pairwise LLM comparison of all crypto assets (upper triangle)."""
-    recommendations = []
+    recommendations: list[dict[str, Any]] = []
     tickers = [t for t in assets if t in analytics]
     for i, asset_a in enumerate(tickers):
         for asset_b in tickers[i + 1:]:
@@ -162,5 +179,5 @@ def evaluate_crypto_analysis(analytics, assets, llm_client, use_cache=False,
     return recommendations, generate_swap_summaries(recommendations)
 
 
-def get_buyable_cryptos(assets):
+def get_buyable_cryptos(assets: Mapping[str, Mapping[str, Any]]) -> list[str]:
     return [ticker for ticker, spec in assets.items() if spec.get("crypto", True)]

@@ -23,7 +23,9 @@ log = logging.getLogger(__name__)
 _LOOPBACK = {"127.0.0.1", "localhost", "::1", "::ffff:127.0.0.1"}
 
 
-def assert_safe_binding(host, auth_token, allow_insecure=False):
+def assert_safe_binding(
+    host: str, auth_token: str | None, allow_insecure: bool = False
+) -> None:
     """Refuse to expose the no-auth API beyond loopback (C-01).
 
     Binding to a non-loopback address without an API token would put the
@@ -46,7 +48,7 @@ def assert_safe_binding(host, auth_token, allow_insecure=False):
         )
 
 
-def main():
+def main() -> None:
     settings = Settings()
     engine = TradingEngine(settings)
     app = create_app(engine)

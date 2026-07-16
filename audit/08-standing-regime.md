@@ -18,7 +18,9 @@ removed several rows (no tool gateway to police, no hot-swap path, no exfil chan
 | Pipeline seeded-defect catch rate | **5/5** fast lane (was 2/6) | may not fall | `gate_selftest.py` | merge |
 | Core mutation score | **8/8 = 1.00** | may not fall | `mutation_smoke.py` | merge |
 | Lint errors | 0 | stay 0 | `ruff` | merge |
+| Untyped/incomplete defs in `src/` | **0** | stay 0 | `mypy` (`disallow_untyped_defs`) | merge |
 | Ruff suppressions | 8 (justified) | may only fall | ruff + review | merge |
+| `type: ignore` suppressions in `src/` | 1 (justified) | may only fall | `mypy --warn-unused-ignores` + review | merge |
 | Unresolved/unpinned/vulnerable deps | 0 | stay 0 | `check_deps.py` + `pip-audit` | merge |
 | Secrets in tree or history | 0 | stay 0 | `secret_scan.py --history` | merge |
 | Floating `-latest` model aliases | 0 | stay 0 | `check_model_pins.py` | merge |
@@ -31,7 +33,7 @@ removed several rows (no tool gateway to police, no hot-swap path, no exfil chan
 
 | Cadence | What runs | Automated? |
 |---|---|---|
-| **Every push/PR** | lint · tests · mutation-smoke · dep-existence · SCA · secret-scan(history) · model-pin · **calibration heartbeat** · policy-gate | ✅ CI |
+| **Every push/PR** | lint · **static types (mypy)** · tests · mutation-smoke · dep-existence · SCA · secret-scan(history) · model-pin · **calibration heartbeat** · policy-gate | ✅ CI |
 | **Monthly (operator checklist)** | rotate keys reminder · rollback drill (redeploy a prior commit, time it) · branch-protection audit (R-1) · confirm withdrawal-disabled keys | ⬜ scriptable |
 | **On trigger** | see below | mixed |
 
@@ -46,7 +48,7 @@ drop fails the build.
 
 | Decay path | Detector |
 |---|---|
-| Suppression creep (`# noqa` to unblock) | ruff suppression count ratcheted; each carries a justification |
+| Suppression creep (`# noqa` / `# type: ignore` to unblock) | ruff + mypy suppression counts ratcheted; `--warn-unused-ignores` fails a stale ignore; each carries a justification |
 | A gate softened / made non-blocking | `gate_selftest.py` stops catching its seed → build fails; policy-gate self-checks |
 | Cap raised silently to move more money | cap is config; a change to defaults is a visible diff; tests pin the mechanism |
 | Model swapped to a floating alias | `check_model_pins.py` |

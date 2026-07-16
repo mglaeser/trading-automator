@@ -14,36 +14,41 @@ import logging
 import random
 import threading
 import time
+from collections.abc import Callable, Iterable
 from datetime import datetime
+from typing import TYPE_CHECKING, Any
 
 import pytz
 from astral import LocationInfo
 from astral.sun import sun
 
+if TYPE_CHECKING:
+    from .settings import Settings
+
 log = logging.getLogger(__name__)
 
-FALLBACK_INTERVAL = [30, 60]  # minutes, when settings carry no window
+FALLBACK_INTERVAL: list[float] = [30, 60]  # minutes, when settings carry no window
 
 
 class Job:
-    def __init__(self, name, fn):
+    def __init__(self, name: str, fn: Callable[[], None]) -> None:
         self.name = name
         self.fn = fn
-        self.override = None   # [lo, hi] set by sentiment; wins over settings
-        self.next_run = None
+        self.override: list[float] | None = None   # [lo, hi] set by sentiment; wins over settings
+        self.next_run: float | None = None
 
 
 class Scheduler:
-    def __init__(self, settings):
+    def __init__(self, settings: "Settings") -> None:
         self._settings = settings
-        self._jobs = {}
+        self._jobs: dict[str, Job] = {}
         self._lock = threading.RLock()
-        self._stop = None      # Event owned by the currently running loop
-        self._thread = None
+        self._stop: threading.Event | None = None   # Event owned by the running loop
+        self._thread: threading.Thread | None = None
 
     # -- sun / period --------------------------------------------------------
 
-    def _location(self):
+    def _location(self) -> LocationInfo:
         sched = self._settings.get("schedule", {})
         return LocationInfo(
             "configured", "region",
@@ -52,13 +57,13 @@ class Scheduler:
             sched.get("longitude", 13.405),
         )
 
-    def sun_times(self):
+    def sun_times(self) -> tuple[datetime, datetime]:
         loc = self._location()
         tz = pytz.timezone(loc.timezone)
         s = sun(loc.observer, date=datetime.now(tz), tzinfo=tz)
         return s["sunrise"], s["sunset"]
 
-    def current_period(self):
+    def current_period(self) -> str:
         try:
             sunrise, sunset = self.sun_times()
             now = datetime.now(sunrise.tzinfo)
@@ -69,11 +74,11 @@ class Scheduler:
 
     # -- jobs ------------------------------------------------------------------
 
-    def add_job(self, name, fn):
+    def add_job(self, name: str, fn: Callable[[], None]) -> None:
         with self._lock:
             self._jobs[name] = Job(name, fn)
 
-    def _interval_for(self, job, period):
+    def _interval_for(self, job: Job, period: str) -> list[float]:
         if job.override:
             return job.override
         window = self._settings.get(f"schedule.{period}.{job.name}")
@@ -82,11 +87,11 @@ class Scheduler:
             return window
         return FALLBACK_INTERVAL
 
-    def _reschedule(self, job, period, now=None):
+    def _reschedule(self, job: Job, period: str, now: float | None = None) -> None:
         low, high = self._interval_for(job, period)
         job.next_run = (now or time.time()) + random.uniform(low, high) * 60.0
 
-    def set_override(self, name, interval):
+    def set_override(self, name: str, interval: Iterable[float]) -> None:
         """Sentiment-driven interval override; wins over settings until
         changed again or the process restarts."""
         with self._lock:
@@ -98,7 +103,7 @@ class Scheduler:
                 self._reschedule(job, self.current_period())
                 log.info("Interval override for '%s': %s", name, interval)
 
-    def summary(self):
+    def summary(self) -> dict[str, Any]:
         period = self.current_period()
         with self._lock:
             return {
@@ -120,10 +125,10 @@ class Scheduler:
     # -- loop --------------------------------------------------------------------
 
     @property
-    def is_running(self):
+    def is_running(self) -> bool:
         return self._thread is not None and self._thread.is_alive()
 
-    def start(self):
+    def start(self) -> None:
         with self._lock:
             if self.is_running:
                 return
@@ -138,7 +143,7 @@ class Scheduler:
             self._thread.start()
         log.info("Scheduler started (period: %s)", period)
 
-    def stop(self):
+    def stop(self) -> None:
         with self._lock:
             if self._stop is not None:
                 self._stop.set()
@@ -147,7 +152,7 @@ class Scheduler:
             thread.join(timeout=10)
         log.info("Scheduler stopped")
 
-    def _loop(self, stop):
+    def _loop(self, stop: threading.Event) -> None:
         last_period = self.current_period()
         while not stop.is_set():
             period = self.current_period()

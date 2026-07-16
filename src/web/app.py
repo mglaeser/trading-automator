@@ -5,12 +5,16 @@ import logging
 import os
 import threading
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 
 from ..exchanges import ExchangeError, create_client
 from ..settings import exchange_configured
+
+if TYPE_CHECKING:
+    from ..engine import TradingEngine
 
 log = logging.getLogger(__name__)
 
@@ -19,11 +23,11 @@ STATIC_DIR = Path(__file__).parent / "static"
 JOBS = {"refresh", "rebalance", "repay", "sweep"}
 
 
-def create_app(engine):
+def create_app(engine: "TradingEngine") -> FastAPI:
     app = FastAPI(title="Trading Automator", version="2.0.0")
     settings = engine.settings
 
-    def require_auth(authorization: str = Header(None)):
+    def require_auth(authorization: str | None = Header(None)) -> None:
         """Guard state-changing routes when an API token is configured (C-01).
         No token set (loopback default) => open, unchanged behaviour."""
         token = settings.get("web.auth_token")
@@ -35,13 +39,13 @@ def create_app(engine):
     # -- UI ----------------------------------------------------------------
 
     @app.get("/", include_in_schema=False)
-    def index():
+    def index() -> FileResponse:
         return FileResponse(STATIC_DIR / "index.html")
 
     # -- health (container healthcheck) -------------------------------------
 
     @app.get("/api/health")
-    def health():
+    def health() -> dict[str, Any]:
         return {
             "status": "ok",
             "engine_running": engine.state.engine_running,
@@ -51,7 +55,7 @@ def create_app(engine):
     # -- status --------------------------------------------------------------
 
     @app.get("/api/status")
-    def status():
+    def status() -> dict[str, Any]:
         return {
             "state": engine.state.to_dict(),
             "scheduler": engine.scheduler.summary(),
@@ -64,11 +68,11 @@ def create_app(engine):
     # -- configuration ----------------------------------------------------------
 
     @app.get("/api/config")
-    def get_config():
+    def get_config() -> dict[str, Any]:
         return settings.masked()
 
     @app.put("/api/config", dependencies=protected)
-    def put_config(payload: dict):
+    def put_config(payload: dict) -> dict[str, Any]:
         try:
             settings.update(payload)
         except (TypeError, ValueError) as exc:
@@ -91,17 +95,17 @@ def create_app(engine):
     # -- engine control -----------------------------------------------------------
 
     @app.post("/api/engine/start", dependencies=protected)
-    def engine_start():
+    def engine_start() -> dict[str, bool]:
         engine.start()
         return {"running": True}
 
     @app.post("/api/engine/stop", dependencies=protected)
-    def engine_stop():
+    def engine_stop() -> dict[str, bool]:
         engine.stop()
         return {"running": False}
 
     @app.post("/api/run/{job}", dependencies=protected)
-    def run_job(job: str):
+    def run_job(job: str) -> dict[str, str]:
         if job not in JOBS:
             raise HTTPException(404, f"Unknown job '{job}' (one of {sorted(JOBS)})")
         target = {
@@ -111,7 +115,7 @@ def create_app(engine):
             "sweep": engine.sweep_small_balances,
         }[job]
 
-        def runner():
+        def runner() -> None:
             # Job errors are recorded in engine.state by _run_job; nothing to do here.
             with contextlib.suppress(Exception):
                 target()
@@ -122,7 +126,7 @@ def create_app(engine):
     # -- connectivity test ------------------------------------------------------------
 
     @app.post("/api/test-connection", dependencies=protected)
-    def test_connection():
+    def test_connection() -> Any:
         try:
             client = create_client(settings)
             message = client.test_connection()

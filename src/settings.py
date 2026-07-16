@@ -25,6 +25,7 @@ import json
 import os
 import threading
 from pathlib import Path
+from typing import Any
 
 from dotenv import load_dotenv
 
@@ -191,7 +192,7 @@ ENV_OVERRIDES = {
 }
 
 
-def exchange_configured(settings):
+def exchange_configured(settings: "Settings") -> bool:
     """True when the selected exchange has credentials to work with."""
     exchange = str(settings.get("exchange", "binance")).lower()
     if exchange == "binance":
@@ -203,7 +204,7 @@ def exchange_configured(settings):
     return False
 
 
-def _get_path(data, dotted):
+def _get_path(data: dict[str, Any], dotted: str) -> Any:
     node = data
     for part in dotted.split("."):
         if not isinstance(node, dict) or part not in node:
@@ -212,7 +213,7 @@ def _get_path(data, dotted):
     return node
 
 
-def _set_path(data, dotted, value):
+def _set_path(data: dict[str, Any], dotted: str, value: Any) -> None:
     parts = dotted.split(".")
     node = data
     for part in parts[:-1]:
@@ -220,7 +221,9 @@ def _set_path(data, dotted, value):
     node[parts[-1]] = value
 
 
-def _deep_merge(base, override, prefix=""):
+def _deep_merge(
+    base: dict[str, Any], override: dict[str, Any], prefix: str = ""
+) -> dict[str, Any]:
     """Merge ``override`` into ``base``; REPLACE_PATHS subtrees are swapped
     wholesale so entries can actually be deleted through the UI."""
     for key, value in override.items():
@@ -233,7 +236,7 @@ def _deep_merge(base, override, prefix=""):
     return base
 
 
-def _coerce(value, template):
+def _coerce(value: Any, template: Any) -> Any:
     """Coerce an incoming value to the shape of the default it replaces.
 
     Raises TypeError/ValueError on values that cannot be made to fit (the
@@ -266,15 +269,16 @@ class Settings:
     ``self._data`` is the composed effective view (defaults < env < overlay).
     """
 
-    def __init__(self, path=CONFIG_PATH):
+    def __init__(self, path: str | Path = CONFIG_PATH) -> None:
         self._path = Path(path)
         self._lock = threading.RLock()
-        self._overlay = self._load_file()
+        self._overlay: dict[str, Any] = self._load_file()
+        self._data: dict[str, Any] = {}
         self._compose()
 
     # -- persistence ------------------------------------------------------
 
-    def _load_file(self):
+    def _load_file(self) -> dict[str, Any]:
         if not self._path.exists():
             return {}
         try:
@@ -282,7 +286,7 @@ class Settings:
         except (json.JSONDecodeError, OSError) as exc:
             raise RuntimeError(f"Could not read {self._path}: {exc}") from exc
 
-    def _compose(self):
+    def _compose(self) -> None:
         data = copy.deepcopy(DEFAULTS)
         for env_name, dotted in ENV_OVERRIDES.items():
             raw = os.getenv(env_name)
@@ -293,23 +297,23 @@ class Settings:
         _deep_merge(data, copy.deepcopy(self._overlay))
         self._data = data
 
-    def save(self):
+    def save(self) -> None:
         with self._lock:
             self._path.parent.mkdir(parents=True, exist_ok=True)
             self._path.write_text(json.dumps(self._overlay, indent=2))
 
     # -- access -----------------------------------------------------------
 
-    def get(self, dotted, default=None):
+    def get(self, dotted: str, default: Any = None) -> Any:
         with self._lock:
             value = _get_path(self._data, dotted)
             return copy.deepcopy(value) if value is not None else default
 
-    def snapshot(self):
+    def snapshot(self) -> dict[str, Any]:
         with self._lock:
             return copy.deepcopy(self._data)
 
-    def masked(self):
+    def masked(self) -> dict[str, Any]:
         """Snapshot safe to send to the browser (secrets replaced by MASK)."""
         data = self.snapshot()
         for dotted in SECRET_PATHS:
@@ -318,14 +322,14 @@ class Settings:
                 _set_path(data, dotted, MASK)
         return data
 
-    def update(self, incoming):
+    def update(self, incoming: dict[str, Any]) -> None:
         """Deep-merge a (possibly partial) config coming from the UI.
 
         Masked secret values are dropped so an untouched password field never
         overwrites the stored secret; values that fail type coercion are
         dropped so the stored value survives."""
 
-        def scrub(node, prefix=""):
+        def scrub(node: dict[str, Any], prefix: str = "") -> None:
             for key in list(node.keys()):
                 dotted = f"{prefix}{key}"
                 value = node[key]
