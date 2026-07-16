@@ -6,26 +6,42 @@
 > its hash. Where an article and a standing control disagree, the stricter binds.
 
 ```yaml
-constitution_state: RATIFIED               # TEMPLATE -> IN_FORCE_PROVISIONAL -> RATIFIED (v1.0)
-catalogue_version: "1.0"                    # Track C (v2.0) amends + re-ratifies in Part 2
+constitution_state: RATIFIED               # RATIFIED at catalogue v2.0 (all 119 checks)
+catalogue_version: "2.0"                    # amended + re-ratified with Track C baselines
 entered_provisional_force: "2026-07-16"
-ratification_date: "2026-07-16"            # this volume's Phase 7 (catalogue v1.0)
+ratification_date: "2026-07-16"            # v1.0 at Part 1 Phase 7; re-ratified v2.0 at Part 2 Phase 7'
 policy_bundle_ref: ".github/workflows/ci.yml + scripts/policy_gate.py"
 mutation_floor: "8/8 core mutants killed (scripts/mutation_smoke.py); may not fall"
 verifier_vendors: "NONE — no second-vendor verifier available to a solo operator (residual R-2)"
 catch_rate_baseline: "5/5 seeded-defect fast lane (scripts/gate_selftest.py); Phase-2 baseline was 2/6"
 coldstart_baseline: "not measured (residual); AGENTS.md + governance/spec.md are the artifacts"
+# Track C baselines landed by the v2.0 strengthening amendment:
+injection_containment: "architectural (no model tools/egress); asserted by test + trifecta rule"
+trifecta_sessions_with_all_three_legs: "0 (asserted by test_no_session_holds_the_lethal_trifecta)"
+api_auth: "bearer token on state-changing routes when set; non-loopback bind without a token refused"
 repository_class: "incubating (production-capable, solo-operated)"
-production_eligible: false                  # Track C unaudited; only Part 2 Phase 7 can flip this
+production_eligible: false                  # see the ratification note — withheld on R-2/R-3, not on any open defect
 ```
 
-> **Ratification note (Phase 7, v1.0).** Ratified over catalogue v1.0 (79 Track A/B checks):
-> zero open FAIL in any blocker band, every fix carrying a demonstrated standing control,
-> the gate proven to block (`policy_gate --merge` PASS; `--deploy` BLOCKED). Track C's
-> register slots are `pending-baseline: part2`. This constitution is amended and
-> re-ratified at v2.0 when Part 2 audits the security scope; **production admission stays
-> impossible until then** (`scripts/policy_gate.py --deploy` fails closed on
-> `audit/engagement-status.json`).
+> **Re-ratification note (Phase 7′, v2.0).** All 119 checks are evidenced against their
+> frozen baselines (Part 1's at Phase 0, Track C's at Phase 0′): **23 PASS / 67 PARTIAL /
+> 29 NOT-APPLICABLE / 0 FAIL / 0 NO-EVIDENCE.** The two applicable STOP-SHIP checks are
+> closed: C-01 (unauthenticated API) fixed and demonstrated; C-04 re-banded NOT-APPLICABLE
+> (only the operator's own data — argued). C-06 does not escalate (the model has no tools).
+> No Track C register slot remains `pending-baseline`.
+>
+> **`production_eligible` stays `false` — and this is honest, not pending.** The §8
+> *technical* gate invariants are met (119 evidenced, zero open blockers, RATIFIED v2.0,
+> attested). But the mandate's Definition of Done (items 6 and 12) requires **independent
+> second-vendor adversarial verification of every fix** and a **standing Verifier fleet /
+> Runner with a dead-man switch** — the anti-self-reference backbone — none of which a
+> single-operator repository can instantiate (residuals R-2, R-3). Per Rule 1 and the
+> mandate's "never fake a control / resist reassurance" charge, the audit will not stamp a
+> production clearance it cannot honestly back. The flag is *computed* to include that
+> requirement (`independent_verification: false`), so it reads false by fact, not by
+> assertion. This is the ceiling for a solo-operated project; "production" here means the
+> operator's own supervised live use, at their own risk, after enabling branch protection
+> (R-1) and rotating the chat-exposed credentials.
 
 ## Instantiation note — the honest scope of this constitution
 

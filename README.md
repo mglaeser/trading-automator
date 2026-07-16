@@ -139,8 +139,14 @@ container stays down across reboots.
 - No credentials live in the repository. Keys are stored in
   `config/config.json` (gitignored) or supplied via environment variables,
   and are masked in every API response to the browser.
-- The web UI has no built-in authentication. Bind it to localhost or put it
-  behind a reverse proxy with auth before exposing it.
+- The web UI is loopback-only by default and has no authentication there. To
+  expose it beyond `127.0.0.1` you must set an API token (`web.auth_token` or
+  `WEB_AUTH_TOKEN`): state-changing routes then require
+  `Authorization: Bearer <token>`, and the app **refuses to start** on a
+  non-loopback bind without one (override only behind loopback port-publishing
+  or an authenticated proxy with `ALLOW_INSECURE_BIND=true`). Reads and the
+  container healthcheck stay open. Still prefer a reverse proxy with auth for
+  any real exposure.
 
 ## Development
 

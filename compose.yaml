@@ -24,6 +24,10 @@ services:
       # port mapping above.
       WEB_HOST: 0.0.0.0
       WEB_PORT: "8000"
+      # The app's bind-guard (C-01) refuses 0.0.0.0 without an API token; safe
+      # here because the port is published only on 127.0.0.1 above. Set a
+      # web.auth_token and remove this if you expose the port beyond loopback.
+      ALLOW_INSECURE_BIND: "true"
     # Bootstrap configuration from a .env file (optional; values saved in the
     # web UI take precedence and are persisted in ./config/config.json):
     # env_file: .env

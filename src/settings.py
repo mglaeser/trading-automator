@@ -43,6 +43,7 @@ SECRET_PATHS = {
     "llm.anthropic_api_key",
     "llm.openai_api_key",
     "sms.auth_token",
+    "web.auth_token",
 }
 
 # Subtrees that are replaced wholesale instead of deep-merged: the UI always
@@ -163,6 +164,11 @@ DEFAULTS = {
     "web": {
         "host": "0.0.0.0",
         "port": 8000,
+        # Optional API token. When set, every state-changing route requires
+        # `Authorization: Bearer <token>`. REQUIRED before the UI may bind to a
+        # non-loopback address (the app refuses to start otherwise). Empty =
+        # loopback-only, no auth (the default).
+        "auth_token": "",
     },
 }
 
@@ -181,6 +187,7 @@ ENV_OVERRIDES = {
     "SMS_RECIPIENT": "sms.recipient",
     "WEB_HOST": "web.host",
     "WEB_PORT": "web.port",
+    "WEB_AUTH_TOKEN": "web.auth_token",
 }
 
 

@@ -63,3 +63,21 @@ item is "covered" by A-01/B-01/B-35/A-39 whose finding is precisely that it does
 Items listed as `[]` in the surface (tools_callable_by_model, vector_stores, databases,
 rag_corpora, fine_tuned_models) are covered by the NOT-APPLICABLE justifications of the
 checks that presuppose them (A-21, B-33, B-23, C-21/Part 2).
+
+---
+
+## Track C coverage (Part 2)
+
+| Surface item | Track C checks | Evidence |
+|---|---|---|
+| `src/web/app.py` (routes) | C-01 (authz), C-23 | test_web_auth; masked reads |
+| `src/main.py` (bind) | C-01 | assert_safe_binding + test |
+| `src/llm.py` + `src/prompts.py` | C-05, C-06, C-07, C-24, C-38 | llm-risk-matrix; injection + prompt-scan tests |
+| egress (binance/etoro/sms) | C-02, C-08 | trifecta labels; threat model |
+| egress (anthropic/openai) | C-34, C-09 | provider-terms note; AI-Act classification |
+| deps | C-03, C-25, C-26 | check_deps + pip-audit; SBOM residual |
+| config/config.json | C-04, C-23 | operator-own data; erasure = delete file |
+| (absent) vector store / RAG / tools / fine-tuning | C-14,C-17,C-18,C-19,C-21,C-22,C-32 | NOT-APPLICABLE justifications in 03-findings.md |
+
+**No Track C surface item is uncovered.** The 16 NOT-APPLICABLE checks are covered by their
+architectural justifications; every present component maps to ≥1 executed Track C check.

@@ -6,7 +6,7 @@ import os
 import threading
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 
 from ..exchanges import ExchangeError, create_client
@@ -22,6 +22,15 @@ JOBS = {"refresh", "rebalance", "repay", "sweep"}
 def create_app(engine):
     app = FastAPI(title="Trading Automator", version="2.0.0")
     settings = engine.settings
+
+    def require_auth(authorization: str = Header(None)):
+        """Guard state-changing routes when an API token is configured (C-01).
+        No token set (loopback default) => open, unchanged behaviour."""
+        token = settings.get("web.auth_token")
+        if token and authorization != f"Bearer {token}":
+            raise HTTPException(401, "Missing or invalid API token")
+
+    protected = [Depends(require_auth)]
 
     # -- UI ----------------------------------------------------------------
 
@@ -58,7 +67,7 @@ def create_app(engine):
     def get_config():
         return settings.masked()
 
-    @app.put("/api/config")
+    @app.put("/api/config", dependencies=protected)
     def put_config(payload: dict):
         try:
             settings.update(payload)
@@ -81,17 +90,17 @@ def create_app(engine):
 
     # -- engine control -----------------------------------------------------------
 
-    @app.post("/api/engine/start")
+    @app.post("/api/engine/start", dependencies=protected)
     def engine_start():
         engine.start()
         return {"running": True}
 
-    @app.post("/api/engine/stop")
+    @app.post("/api/engine/stop", dependencies=protected)
     def engine_stop():
         engine.stop()
         return {"running": False}
 
-    @app.post("/api/run/{job}")
+    @app.post("/api/run/{job}", dependencies=protected)
     def run_job(job: str):
         if job not in JOBS:
             raise HTTPException(404, f"Unknown job '{job}' (one of {sorted(JOBS)})")
@@ -112,7 +121,7 @@ def create_app(engine):
 
     # -- connectivity test ------------------------------------------------------------
 
-    @app.post("/api/test-connection")
+    @app.post("/api/test-connection", dependencies=protected)
     def test_connection():
         try:
             client = create_client(settings)

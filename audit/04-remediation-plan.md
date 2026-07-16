@@ -86,3 +86,26 @@ floating model undermines the eval baseline. Wave R is behaviour-preserving and 
 freely. Each fix follows the Phase-5 discipline: red test → smallest change → suite +
 mutation → clone sweep → standing control demonstrated → independent review (discretionary,
 R-2) → deterministic gate.
+
+---
+
+## Track C waves + structural ledger (Part 2, catalogue v2.0)
+
+**Wave C1 — the applicable STOP-SHIP:** C-01 (bind-guard + token auth) — done, demonstrated.
+**Wave C2 — structural assertions:** C-05 matrix, C-06/C-08 capability inventory + trifecta
+test, C-24 prompt scan, C-03 playbook — done.
+**Track C structural ledger (door provenance, §6.5.6):**
+
+| Check(s) | Door (Part 1) | Stands at baseline? | Taken/verified | Provenance |
+|---|---|---|---|---|
+| C-01 | tenancy-in-DAL | N/A (single-user) | Direct fix: auth + bind-guard | `door_built_by_change: fix/c01-auth`; `initial_verdict_preserved: true`; `current_verification_reference: test_web_auth` |
+| C-06 C-08 C-12 | tool gateway | Stands vacuously — **no tools exist** | Verified applicable (capability-labels.json) | `baseline_affected_checks: []` (no widening); trifecta test is the assertion |
+| C-07 C-08 | agent-split | Stands structurally — model has no egress | Verified applicable | no widening; injection + trifecta tests |
+| C-04 C-28 C-32 | derived-store registry | N/A — no derived PII stores | argued N/A | — |
+| C-16 | credential broker | N/A — single principal | argued N/A | — |
+| C-34 | model gateway | `llm.py` is the single inference chokepoint | Policed (provider-terms note) | residual C-34 |
+
+No structural door was built or widened during Track C remediation (C-01 is a direct fix,
+not a door), so **no Part 1 verdict required re-verification behind a widened door**. Every
+door the Track C checks lean on was pre-existing or vacuous (the tool/egress doors hold
+because those capabilities do not exist). `initial_verdict_preserved: true` throughout.

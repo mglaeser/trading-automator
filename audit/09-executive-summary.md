@@ -1,59 +1,69 @@
-`SCOPE: TRACKS A/B (CATALOGUE v1.0) COMPLETE — TRACK C (SECURITY, PRIVACY, ASSURANCE) NOT YET AUDITED — NOT CLEARED FOR PRODUCTION TRAFFIC UNTIL PART 2 CLOSES`
+`SCOPE: FULL 119-CHECK CATALOGUE (v2.0) COMPLETE — TRACKS A, B, C AUDITED — NOT PRODUCTION-CLEARED (see below: withheld on a structural residual, not an open defect)`
 
-# 09 — Executive Summary (Part 1, catalogue v1.0)
+# 09 — Executive Summary (both volumes, 119 checks)
 
 **When this engagement began, the pipeline caught two of six seeded defects — and because
-no human reviews any change here, a green build in this repository was not evidence of
-anything. The system had, in the mandate's terms, no verification at all.** That is the
-fact everything else hangs from, and it is now fixed: the deterministic gate catches five
-of five in the fast lane, kills eight of eight core mutants, and blocks a merge on any open
-blocker. It caught 2/6; it is not me you are trusting now, it is that gate.
+no human reviews any change here, a green build proved nothing.** It now catches five of
+five in the fast lane and kills eight of eight core mutants; the deterministic gate blocks
+a merge on any open blocker, and the deploy gate fails closed on an unaudited scope. That
+is the difference this audit made. It caught 2/6; you are not trusting me now, you are
+trusting that gate.
 
-## What was actually wrong (baseline: 0 PASS / 52 PARTIAL / 14 FAIL / 13 N/A)
-1. **No verification gate existed** — no CI, no branch protection, no scanner, no mutation
-   testing, no independent verifier. The 38-test suite ran only when someone typed it.
-   (A-01, A-02, A-08, A-13, B-01 — STOP-SHIP/BLOCKER-1 under the §3 escalations.)
-2. **The irreversible money-moving capability had no blast-radius cap.** In live mode a
-   single injection, bug, or bad LLM read could move unbounded funds, with a manual-only
-   kill switch. (A-11, A-34, B-08.)
-3. **Two documented safety claims were false** — "rebalance aborts, no trades" (housekeeping
-   trades run before the abort) and overstated test coverage of the Binance order path.
+## Where it stands — all 119 checks
+**23 PASS · 67 PARTIAL · 29 NOT-APPLICABLE · 0 FAIL · 0 NO-EVIDENCE.** Every FAIL from the
+baseline was closed to a PASS with a demonstrated standing control or a PARTIAL carrying a
+residual with a compensating control and a tripwire. Every NOT-APPLICABLE is argued from
+the architecture, not inferred from a missing file.
 
-## What is fixed and standing (now: 16 PASS / 50 PARTIAL / 0 FAIL / 13 N/A)
-- A **CI gate** (`.github/workflows/ci.yml` + six `scripts/*.py`): lint, mutation-smoke,
-  dependency-existence, SCA, secret-scan (history), model-pin lint, a seeded-defect
-  calibration heartbeat, and a fail-closed policy gate. Every control was **demonstrated
-  blocking a re-introduced defect** — not designed, watched.
-- A **trading blast-radius cap + self-firing auto-halt** at the single `_swap` chokepoint:
-  large swaps clamp down, a swap breaching the rolling-24h cap is refused and the engine
-  halts itself (persisted). Proven by test.
-- The two false claims corrected; injection containment made explicit with a test.
-- **Zero open FAIL in any blocker band.** `policy_gate --merge` PASSES; the suite is 43
-  green; catch rate 2/6 → 5/5; core mutation 0 → 8/8.
+## What was wrong, and is now fixed
+1. **No verification gate existed.** Now: CI (`.github/workflows/ci.yml` + `scripts/`) —
+   lint, mutation-smoke, dependency-existence, SCA, secret-scan (history), model-pin,
+   seeded-defect calibration, and a fail-closed policy gate. Each control demonstrated
+   blocking its defect.
+2. **The irreversible money-mover had no cap.** Now: a per-swap ceiling + rolling-24h cap +
+   self-firing auto-halt at the single `_swap` chokepoint. Proven by test.
+3. **The state-changing API was unauthenticated (C-01, STOP-SHIP).** Now: bearer-token auth
+   on every mutating route, and a bind-guard that refuses to expose the no-auth API beyond
+   loopback. Proven by 6 tests.
 
-## What is still broken, and what will break next
-- **This is NOT cleared for production.** Track C (security, privacy, assurance — the two
-  unconditional STOP-SHIP checks C-01/C-04 among them) is **unaudited**. `production_eligible`
-  is `false`, computed, and `policy_gate --deploy` fails closed on it. Part 1 cannot lift
-  that; only Part 2 can.
-- **Three residuals are structural, not oversights** (`06-residual-risk-register.md`):
-  **R-1** a solo repo cannot separate the gate from the gated — *you must enable branch
-  protection with the `gate` check required, or the gate is bypassable by a direct push;*
-  **R-2** there is no standing second-vendor verifier; **R-3** the periodic drills are a
-  manual checklist. Each has a compensating control and a tripwire. None is faked green.
-- **The one change that would turn this contained system into an exposed one:** giving the
-  LLM tool-use. Today the model has no tools and no egress, so an injection cannot act —
-  that containment is architectural. Add a tool and the lethal trifecta can close. The
-  re-run trigger for it is wired (`08-standing-regime.md`); honour it.
-- **What will rot first:** the trading cap raised "just for today," or a model id drifting
-  to an alias. The detectors exist (config diffs, `check_model_pins`), but a solo operator
-  is the one who must not wave them through — Article XIV exists for exactly that moment.
-- **Owed outside this repo:** rotate the credentials pasted into the original chat. They
-  are not in git history, but a paste is a disclosure. The audit cannot do it for you.
+## The security track (Track C) — the honest picture
+- **C-04 (privacy) re-banded off STOP-SHIP:** the only personal data is the operator's
+  *own* keys and phone number — no third-party data subjects, so the GDPR triangle does
+  not bind. Argued, not waved away.
+- **C-06 does NOT escalate to STOP-SHIP:** the LLM has no tools and no egress — it returns
+  JSON, the deterministic engine acts. A successful prompt injection cannot trigger a
+  consequential action; the exfiltration leg structurally does not exist (C-07, C-08).
+  This is the system's single biggest security strength, and it is architectural.
+- **16 Track C checks are NOT-APPLICABLE by architecture:** no tenants, no third-party PII,
+  no RAG/vector store, no fine-tuning, no tools/connectors, no content-safety surface, no
+  binding compliance framework. Each is argued in `03-findings.md`.
+
+## What is still true, and what will break next
+- **NOT production-cleared — and read why carefully.** The technical gate invariants are
+  all met (119 evidenced, zero open blockers, RATIFIED v2.0, attested). `production_eligible`
+  is nonetheless **computed** `false`, because the mandate's Definition of Done requires
+  **independent second-vendor adversarial verification of every fix** and a **standing
+  Runner/Verifier fleet** — the anti-self-reference backbone — and **a single-operator
+  repository cannot instantiate either** (residuals R-2, R-3). I will not stamp a clearance
+  the engagement cannot honestly back. This is the ceiling for a solo project, not a
+  defect. "Production" here means *the operator's own supervised live use.*
+- **Three things only you can do** (`06-residual-risk-register.md`): **(R-1)** enable branch
+  protection with the `gate` check *required* — until then a direct push bypasses the gate;
+  **rotate** the credentials pasted into the original chat (not in git history, but
+  disclosed); and it remains **your in-command decision** to trade live (dry-run defaults
+  on, the cap applies regardless).
+- **The one change that would break the security model:** giving the LLM a tool. Today the
+  model cannot act; add a tool and the lethal trifecta can close. The re-run trigger is
+  wired (`08-standing-regime.md`) — honour it, and Article XIV exists for the moment someone
+  asks you to skip it.
+- **What rots first:** the trading cap raised "just for today," a model id drifting to an
+  alias, or branch protection quietly disabled. The detectors exist; a solo operator is the
+  one who must not wave them through.
 
 ## Bottom line
-Track A/B is complete, gated, and honest about its own limits. The system is materially
-safer than it was — capped, scanned, mutation-tested, and unable to trade past a hard
-ceiling — but it is **not production-cleared**, and it will only stay safe if the gate stays
-required and nobody teaches the model to act. The green checkmark now means something. Keep
-it meaning something.
+All 119 checks are closed with zero open defects; the real security gaps — no gate, an
+uncapped money-mover, an unauthenticated API — are fixed and proven. The system is
+materially safer than it was and honest about the one thing it structurally cannot be: a
+machine with an independent verifier standing behind it. Run it for yourself, with the caps
+on and branch protection enabled, at your own risk — not as a service to others, and not on
+the belief that anything but this gate is watching it.

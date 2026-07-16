@@ -67,3 +67,63 @@ standing control). This substitution is recorded, not presented as equivalent �
 Baseline **0 PASS / 52 PARTIAL / 14 FAIL / 13 N/A** → after repair **16 PASS / 50 PARTIAL
 / 0 FAIL / 13 N/A**. Every FAIL closed to PASS-with-demonstrated-control or
 PARTIAL-with-residual. Pipeline catch rate 2/6 → 5/5. Mutation on core 0 → 8/8.
+
+---
+
+# Part 2 (Track C) verification
+
+## Fix 6 — C-01 unauthenticated state-changing API (STOP-SHIP)
+- **Red first:** `tests/test_web_auth.py` — `ImportError: assert_safe_binding` and (with the
+  guard stubbed) 401-expectations failed. Pasted in the Part-2 log.
+- **Change:** `assert_safe_binding` bind-guard (`src/main.py`) + `require_auth` bearer-token
+  dependency on every state-changing route (`src/web/app.py`) + `web.auth_token` secret
+  (masked) + `WEB_AUTH_TOKEN` env; `deploy.sh`/`compose.yaml` set the named, documented
+  `ALLOW_INSECURE_BIND=true` (safe: podman publishes only to loopback).
+- **Green after:** 6 auth tests + 3 security-invariant tests pass; full suite **53 green**.
+- **Clone sweep:** all state-changing routes (`PUT /api/config`, `engine/start`,
+  `engine/stop`, `run/{job}`, `test-connection`) carry `dependencies=protected`; reads +
+  `/api/health` deliberately open. No mutating route left unguarded.
+- **Standing control demonstrated:** bind-guard raises on `0.0.0.0` without a token; a
+  request without the bearer token gets 401; with it, 200 —
+  `audit/evidence/c01-security-demonstration.txt`.
+- **Mutation:** `secret mask disabled` + the schema mutants still killed (8/8), so the
+  masking/validation the auth relies on can still fail if broken.
+
+## Track C structural-invariant tests (C-06/C-07/C-08/C-24)
+- `test_no_session_holds_the_lethal_trifecta` — asserts no session holds all three legs
+  (from `governance/capability-labels.json`); adding a third leg fails it.
+- `test_llm_advisor_has_no_egress_or_tools` — asserts the advisor declares no tools and the
+  `LLMClient` exposes no egress-shaped method.
+- `test_no_secrets_or_pii_in_prompts` — asserts the system prompt + templates carry no
+  secret/PII pattern.
+All pass; all run in the gate every push.
+
+## The closing 119-wide re-audit sample (Phase 6′ "audit the audit")
+A genuine second-vendor independent re-audit is unavailable (R-2). In its place, a
+≥10% sample (13 checks), ≥1 per represented band, ≥1 per track, re-verified from evidence
+alone against the frozen baselines:
+
+| Check | Band | Track | Re-verified verdict | Evidence re-checked |
+|---|---|---|---|---|
+| C-01 | STOP-SHIP | C | PASS | test_web_auth (6) + bind-guard demo |
+| B-06 | STOP-SHIP | B | PARTIAL | history scan clean; at-rest residual stands |
+| C-04 | STOP-SHIP | C | NOT-APPLICABLE | no third-party data subjects — argued |
+| A-01 | BLOCKER-1 | A | PASS | policy_gate blocks baseline; gate jobs green |
+| B-04 | BLOCKER-1 | B | PASS | check_deps 9/9 + pip-audit; D3 caught |
+| C-03 | BLOCKER-1 | C | PASS | same gate + playbook; deps established |
+| A-34 | BLOCKER-2 | A | PASS | test_daily_cap auto-halt |
+| C-08 | BLOCKER-2 | C | PASS | trifecta test |
+| A-13 | MUST-FIX | A | PASS | ruff clean; catches D4 |
+| C-24 | MUST-FIX | C | PASS | no-secrets-in-prompts test + secret_scan |
+| A-35 | SHOULD-FIX | A | PASS | zero approval queues; auto-halt |
+| C-16 | MUST-FIX | C | NOT-APPLICABLE | single principal — argued |
+| C-40 | ASSESS | C | NOT-APPLICABLE | immaterial — argued |
+
+No disagreement on re-verification (the deterministic gate re-derives each blocking verdict
+from executable evidence). The sample is the audit's own proof, not a substitute for the
+absent second-vendor verifier (R-2), which is recorded as a residual.
+
+## Net effect across both volumes
+Baseline **0 PASS / 52 PARTIAL / 14 FAIL / 13 N/A** (79) → after both volumes **23 PASS /
+67 PARTIAL / 29 N/A / 0 FAIL** (119). Pipeline catch rate 2/6 → 5/5; core mutation 0 → 8/8;
+one STOP-SHIP fixed (C-01), one re-banded (C-04), one non-escalating (C-06).

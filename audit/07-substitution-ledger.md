@@ -25,3 +25,20 @@ is standing. It has no silent gaps; the three genuine limits are named as residu
 **No control in this engagement is discharged by proposing that a human review it.** The
 one legitimate human input — the operator's decision to go live (author intent) — is
 in-command, not in-loop, and is bounded by the cap that applies regardless (A-15/CL-3).
+
+---
+
+## Track C substitutions (Part 2 — where the S2/S5/S6 mechanisms concentrate)
+
+| Classical control (ends in a person) | Substitution | Mechanism here | Evidence |
+|---|---|---|---|
+| A human approves an exposed/unauthenticated admin action | **S1/S6** bind-guard + token auth | `assert_safe_binding` refuses non-loopback bind without a token; `require_auth` on state-changing routes | `test_web_auth` (6); `audit/evidence/c01-security-demonstration.txt` |
+| A human checks no session can inject-then-exfiltrate | **S13** trifecta unrepresentability | `capability-labels.json` + `test_no_session_holds_the_lethal_trifecta`; the model has no egress | tests pass; adding a third leg fails the build |
+| A human confirms an injection can't act | **S5/S13** architectural containment | model has no tools; output schema-bounded; capped `_swap` | `test_injection_cannot_produce_out_of_schema_action` |
+| A reviewer keeps secrets/PII out of prompts | **S1/S3** prompt scan | `test_no_secrets_or_pii_in_prompts` + `secret_scan` over `src/prompts.py`/`src/llm.py` | tests pass |
+| A human classifies the AI system for the AI Act | **in-command** (legitimate) | classification authored once in `security-notes.md`; re-run trigger on multi-user move | documented; C-09 finding |
+| A second-vendor verifier attacks each fix | **residual R-2** | deterministic gate (no model opinion) + discretionary independent review | recorded as a residual, NOT presented as equivalent |
+
+**Complete across both volumes.** Every control a conventional audit would discharge with
+"a human reviews it" now ends in a mechanism — except the independent-verifier backbone
+(R-2), which is named as the one thing a solo operator cannot substitute, not faked.

@@ -1,0 +1,6 @@
+# C-01 standing-control demonstration (Part 2)
+## bind-guard refuses non-loopback without token
+  REFUSED (correct): Refusing to bind the UI to '0.0.0.0' without an API token: the state-changing AP ...
+## auth on state-changing route
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+10 passed, 1 warning in 0.39s

@@ -1,9 +1,9 @@
 {
-  "catalogue_version": "1.0",
-  "note": "Master index only -- navigation/validation, never a restatement of normative check text (see governance/mandate/). Track C's 40 checks are registered as planned-extension:part2, activated as catalogue v2.0 when Part 2 opens.",
+  "catalogue_version": "2.0",
+  "note": "Catalogue v2.0: all 119 checks active. Track C activated by decision record at Part 2 Phase 0'.",
   "registered_check_count": 119,
-  "active_check_count": 79,
-  "planned_extension_count": 40,
+  "active_check_count": 119,
+  "planned_extension_count": 0,
   "required_check_ids": [
     "A-01",
     "A-02",
@@ -1164,7 +1164,7 @@
       "structural_fix": true,
       "door": "tenancy-in-dal",
       "conditional_escalation": null,
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-02",
@@ -1177,7 +1177,7 @@
       "structural_fix": true,
       "door": "generate-inventory",
       "conditional_escalation": null,
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-03",
@@ -1190,7 +1190,7 @@
       "structural_fix": false,
       "door": null,
       "conditional_escalation": null,
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-04",
@@ -1203,7 +1203,7 @@
       "structural_fix": true,
       "door": "derived-store-registry",
       "conditional_escalation": "STOP-SHIP where EU personal data is processed; else re-band against the law that applies",
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-05",
@@ -1216,7 +1216,7 @@
       "structural_fix": false,
       "door": null,
       "conditional_escalation": null,
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-06",
@@ -1229,7 +1229,7 @@
       "structural_fix": true,
       "door": "tool-gateway",
       "conditional_escalation": "priority 10 / STOP-SHIP if any model can call a tool that writes/sends/spends/deletes/executes",
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-07",
@@ -1242,7 +1242,7 @@
       "structural_fix": true,
       "door": "agent-split",
       "conditional_escalation": null,
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-08",
@@ -1255,7 +1255,7 @@
       "structural_fix": true,
       "door": "tool-gateway",
       "conditional_escalation": null,
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-09",
@@ -1268,7 +1268,7 @@
       "structural_fix": true,
       "door": "generate-inventory",
       "conditional_escalation": "hard gate at 10 if anything is high-risk on the EU market",
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-10",
@@ -1281,7 +1281,7 @@
       "structural_fix": false,
       "door": null,
       "conditional_escalation": null,
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-11",
@@ -1294,7 +1294,7 @@
       "structural_fix": false,
       "door": null,
       "conditional_escalation": null,
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-12",
@@ -1307,7 +1307,7 @@
       "structural_fix": true,
       "door": "tool-gateway",
       "conditional_escalation": null,
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-13",
@@ -1320,7 +1320,7 @@
       "structural_fix": false,
       "door": null,
       "conditional_escalation": null,
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-14",
@@ -1333,7 +1333,7 @@
       "structural_fix": false,
       "door": null,
       "conditional_escalation": null,
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-15",
@@ -1346,7 +1346,7 @@
       "structural_fix": false,
       "door": null,
       "conditional_escalation": null,
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-16",
@@ -1359,7 +1359,7 @@
       "structural_fix": true,
       "door": "credential-broker",
       "conditional_escalation": null,
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-17",
@@ -1372,7 +1372,7 @@
       "structural_fix": true,
       "door": "tool-gateway",
       "conditional_escalation": null,
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-18",
@@ -1385,7 +1385,7 @@
       "structural_fix": false,
       "door": null,
       "conditional_escalation": null,
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-19",
@@ -1398,7 +1398,7 @@
       "structural_fix": false,
       "door": null,
       "conditional_escalation": null,
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-20",
@@ -1411,7 +1411,7 @@
       "structural_fix": false,
       "door": null,
       "conditional_escalation": null,
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-21",
@@ -1424,7 +1424,7 @@
       "structural_fix": false,
       "door": null,
       "conditional_escalation": null,
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-22",
@@ -1437,7 +1437,7 @@
       "structural_fix": false,
       "door": null,
       "conditional_escalation": null,
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-23",
@@ -1450,7 +1450,7 @@
       "structural_fix": true,
       "door": "telemetry-emitter",
       "conditional_escalation": null,
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-24",
@@ -1463,7 +1463,7 @@
       "structural_fix": true,
       "door": "telemetry-emitter",
       "conditional_escalation": null,
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-25",
@@ -1476,7 +1476,7 @@
       "structural_fix": false,
       "door": null,
       "conditional_escalation": null,
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-26",
@@ -1489,7 +1489,7 @@
       "structural_fix": false,
       "door": null,
       "conditional_escalation": null,
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-27",
@@ -1502,7 +1502,7 @@
       "structural_fix": false,
       "door": null,
       "conditional_escalation": null,
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-28",
@@ -1515,7 +1515,7 @@
       "structural_fix": true,
       "door": "derived-store-registry",
       "conditional_escalation": null,
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-29",
@@ -1528,7 +1528,7 @@
       "structural_fix": false,
       "door": null,
       "conditional_escalation": null,
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-30",
@@ -1541,7 +1541,7 @@
       "structural_fix": false,
       "door": null,
       "conditional_escalation": null,
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-31",
@@ -1554,7 +1554,7 @@
       "structural_fix": false,
       "door": null,
       "conditional_escalation": null,
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-32",
@@ -1567,7 +1567,7 @@
       "structural_fix": true,
       "door": "derived-store-registry",
       "conditional_escalation": null,
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-33",
@@ -1580,7 +1580,7 @@
       "structural_fix": false,
       "door": null,
       "conditional_escalation": null,
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-34",
@@ -1593,7 +1593,7 @@
       "structural_fix": true,
       "door": "model-gateway",
       "conditional_escalation": null,
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-35",
@@ -1606,7 +1606,7 @@
       "structural_fix": true,
       "door": "heldout-eval-store",
       "conditional_escalation": null,
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-36",
@@ -1619,7 +1619,7 @@
       "structural_fix": false,
       "door": null,
       "conditional_escalation": null,
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-37",
@@ -1632,7 +1632,7 @@
       "structural_fix": false,
       "door": null,
       "conditional_escalation": "BLOCKER-1 if any production component has no attested provenance chain",
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-38",
@@ -1645,7 +1645,7 @@
       "structural_fix": false,
       "door": null,
       "conditional_escalation": null,
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-39",
@@ -1658,7 +1658,7 @@
       "structural_fix": false,
       "door": null,
       "conditional_escalation": null,
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     },
     {
       "id": "C-40",
@@ -1671,7 +1671,7 @@
       "structural_fix": false,
       "door": null,
       "conditional_escalation": null,
-      "scope_status": "planned-extension"
+      "scope_status": "active"
     }
   ]
 }

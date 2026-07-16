@@ -91,6 +91,9 @@ run() {
         -e AUTOSTART=true \
         -e WEB_HOST=0.0.0.0 \
         -e WEB_PORT=8000 \
+        -e ALLOW_INSECURE_BIND=true \
+        `# ^ safe: the port is published only on ${BIND_ADDR} above; the app's` \
+        `#   own bind-guard (C-01) would otherwise refuse 0.0.0.0 without a token` \
         "$IMAGE" >/dev/null
 }
 

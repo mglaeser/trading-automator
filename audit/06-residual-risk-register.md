@@ -60,3 +60,26 @@ ignored. None here is ignored.
 **Out-of-repo action still owed (operator):** rotate the credentials that were pasted into
 the original chat (Nexo/TOTP/Anthropic/OpenAI/Groq/sipgate). They are **not** in git
 history (B-06 scan clean), but a chat paste is a disclosure. This audit cannot rotate them.
+
+---
+
+## Track C residuals (Part 2)
+
+| ID | Risk | Compensating control | Tripwire | Band |
+|---|---|---|---|---|
+| C-07 | Prompt injection has no general defence (UNSETTLED); a crafted output could pick a valid-but-wrong trade action. | Architectural containment (no model tools/egress; schema-bounded action space); trading cap + dry-run default bound the consequence. | Injection test + cap tests in the gate; residual re-accepted on cadence (security-notes.md). | BLOCKER-1, PARTIAL |
+| C-30 | Jailbreak-to-consequence (UNSETTLED). | Not a chat surface (no end-user prompt reaches the model); same architectural containment. | Cap tripwire; injection test. | SHOULD-FIX, PARTIAL |
+| C-10 | LLM live judgment has no golden-set regression eval. | Deterministic decision surface regression-tested + mutation-pinned; schema bounds output. | test_distribution_scoring + mutation smoke; prompt changes ride the gate. | BLOCKER-2, PARTIAL |
+| C-34 | Provider training-on-data opt-out not asserted programmatically. | Anthropic/OpenAI API default: no training on API traffic; operator confirms in their provider account (in-command). | Documented in security-notes; re-check on provider-term change. | MUST-FIX, PARTIAL |
+| C-25/C-26/C-37 | No license-scan gate / SBOM / signed-attestation chain. | Permissive deps; pip-audit + check_deps; git history is the reconstructible provenance chain. | pip-audit every push; commit provenance. | MUST-FIX/PLAN, PARTIAL |
+
+## The two Definition-of-Done items a solo repo cannot meet (why production_eligible is false)
+
+| ID | Definition-of-Done item unmet | Why unmeetable solo | Compensating control | Tripwire |
+|---|---|---|---|---|
+| R-2 | #6/#12 — independent second-vendor adversarial verification of every fix; a standing Verifier fleet | No access to an always-on model from a different vendor as a standing verifier | The deterministic gate decides merges and holds no model opinion; the mutation/calibration corpora are the standing adversary; discretionary independent-model review on high-risk diffs | A regression in mutation/calibration catch counts fails the build |
+| R-3 | #12 — a Runner with a dead-man switch | No separate always-on scheduler identity | CI-on-every-push is the load-bearing cadence (fully automated); periodic drills are a scriptable operator checklist | The calibration heartbeat runs on every push, so the key decay signal fires without a scheduler |
+
+**These two are the entire reason `production_eligible` computes `false`.** They are
+structural, named, and compensated — not open defects. This is the ceiling for a
+single-operator project.

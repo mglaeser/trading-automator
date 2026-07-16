@@ -25,7 +25,7 @@ removed several rows (no tool gateway to police, no hot-swap path, no exfil chan
 | Irreversible trade without the cap | 0 | stay 0 | cap tests + `_swap` chokepoint | merge |
 | Open FAIL in a blocker band | 0 | stay 0 | `policy_gate.py` | merge |
 | PASS with null standing control | 0 | stay 0 | `policy_gate.py` | merge |
-| `production_eligible` while Part 2 unaudited | false | stays false | `policy_gate --deploy` | deploy |
+| `production_eligible` (computed; false while any blocker open OR independent-verification/Runner absent) | false | flips only when computed true | `policy_gate --deploy` | deploy |
 
 ## Cadence
 
@@ -74,3 +74,22 @@ drop fails the build.
 The regime's owning role is **the operator** (in-command). Its health is one number: the
 seeded-defect catch rate (`gate_selftest.py`). If it falls, nothing else about the regime
 is working, whatever the dashboards say.
+
+---
+
+## Track C additions to the ratchet register (v2.0)
+
+| Metric | Baseline | Direction | Enforced by | Blocks |
+|---|---|---|---|---|
+| Sessions holding all three trifecta legs | 0 | stay 0 | `test_no_session_holds_the_lethal_trifecta` | merge |
+| State-changing routes without auth-when-token-set | 0 | stay 0 | `test_web_auth` | merge |
+| Non-loopback bind without a token | refused | stays refused | `assert_safe_binding` | startup |
+| Secrets/PII in prompts | 0 | stay 0 | `test_no_secrets_or_pii_in_prompts` + secret_scan | merge |
+| Model tools (egress-capable) | 0 | stay 0 without a full C-06/C-07/C-08 re-run | capability-labels.json + review | merge |
+
+## Track C re-run triggers (added)
+- **LLM gains a tool / egress** → re-run C-06, C-07, C-08, C-12, C-17 + A-10/A-11/B-20. The
+  single change that turns this contained system into an exposed one.
+- **Move toward multi-user / market placement** → re-run C-01, C-04, C-09, C-16, C-23, C-28,
+  and re-band the N/A privacy set.
+- **New model / provider** → re-run C-34 (training opt-out) + B-13/B-24.
