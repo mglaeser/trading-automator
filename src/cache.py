@@ -1,35 +1,41 @@
-"""Response cache for expensive external calls (was responseIO).
+"""Response cache for expensive external calls.
 
-When enabled (dry-run/debug mode), analysis and LLM responses are cached to
-JSON files so repeated development runs do not burn API quota.
+When enabled (dry-run mode), analysis and LLM responses are cached to JSON
+files so repeated development runs do not burn API quota. Entries expire
+after ``max_age`` seconds so long-running dry-run sessions still track the
+market instead of replaying the first cycle forever.
 """
 
 import json
 import logging
 import os
+import time
 from pathlib import Path
 
 log = logging.getLogger(__name__)
 
 CACHE_DIR = Path(os.getenv("CACHE_DIR", "artifacts/cache"))
+DEFAULT_MAX_AGE = 1800  # seconds
 
 
-def cached_response(name, callback, enabled=False):
+def cached_response(name, callback, enabled=False, max_age=DEFAULT_MAX_AGE):
     """Run ``callback`` and cache its JSON-serialisable result under ``name``.
 
-    With ``enabled`` False the callback always runs (result is still written
-    for later inspection). With True, an existing cache entry short-circuits
-    the call.
+    With ``enabled`` False the callback always runs (the result is still
+    written for later inspection). With True, a cache entry younger than
+    ``max_age`` seconds short-circuits the call.
     """
     safe = "".join(c if c.isalnum() or c in "-_." else "_" for c in name)
     path = CACHE_DIR / f"{safe}.json"
 
     if enabled and path.exists():
         try:
-            with path.open() as fp:
-                result = json.load(fp)
-            log.info("Loaded from cache: %s", path.name)
-            return result
+            if time.time() - path.stat().st_mtime < max_age:
+                with path.open() as fp:
+                    result = json.load(fp)
+                log.info("Loaded from cache: %s", path.name)
+                return result
+            log.debug("Cache entry expired: %s", path.name)
         except (json.JSONDecodeError, OSError) as exc:
             log.warning("Ignoring broken cache file %s: %s", path, exc)
 

@@ -1,0 +1,32 @@
+{
+  "catalogue_version": "2.0",
+  "registered_check_count": 119,
+  "active_check_count": 119,
+  "present_check_count": 119,
+  "evidenced_check_count": 119,
+  "part1_status": "COMPLETE",
+  "part2_status": "COMPLETE",
+  "phase": "7-prime",
+  "highest_open_band": null,
+  "open_stop_ship_count": 0,
+  "open_blocker_1_count": 0,
+  "open_blocker_2_count": 0,
+  "security_scope_audited": true,
+  "constitution_state": "RATIFIED",
+  "production_eligible": false,
+  "production_eligible_reason": "COMPUTED false. Technical gate invariants (Part 1 \u00a78) are MET: 119/119 evidenced, 0 open FAIL, RATIFIED v2.0, attested. Withheld on Definition-of-Done items 6 & 12: independent second-vendor adversarial verification per fix (independent_verification=false, R-2) and a standing Runner/Verifier fleet with a dead-man switch (runner_deadman_switch=false, R-3) cannot be instantiated by a single-operator repo. Per Rule 1 / 'never fake a control', the audit will not stamp a clearance it cannot back. Ceiling for a solo project; 'production' here = the operator's own supervised live use after enabling branch protection (R-1) and rotating chat-exposed keys.",
+  "commit_under_audit": "840e4f446409bca09d470e1d34a72181030f68b6",
+  "repository_class": "production-capable-solo-operated",
+  "pending_check_ids": [],
+  "mandate_manifest_hash": "sha256:55701343164062ebc9c07e4c9ac22a123214ab2811c6c298b57366368e577a13",
+  "constitution_hash": "sha256:031cdb20c6182456e340d78e652eaceca74bcf815279ffb846a4af736cbc9e74",
+  "verdict_tally": {
+    "PASS": 23,
+    "PARTIAL": 67,
+    "NOT-APPLICABLE": 29
+  },
+  "open_fail_count": 0,
+  "partial_residual_count": 50,
+  "independent_verification": false,
+  "runner_deadman_switch": false
+}

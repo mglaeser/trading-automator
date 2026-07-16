@@ -1,0 +1,7 @@
+-r requirements.txt
+pytest>=8
+httpx>=0.27   # fastapi TestClient
+
+# --- the verification gate's tooling (A-08/A-13/B-04/A-02) ---
+ruff>=0.15    # lint + format-check (enforced coding standard; broad-except gate)
+pip-audit>=2  # software-composition analysis (known-vuln dependencies)

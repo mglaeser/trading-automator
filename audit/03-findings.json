@@ -1,0 +1,2349 @@
+[
+  {
+    "id": "A-01",
+    "title": "The verification gate on every production change",
+    "priority": 9,
+    "band": "BLOCKER-1",
+    "verdict": "PASS",
+    "probe": "Looked for a deterministic policy gate / branch protection / required checks; tried to find any automated block on merge.",
+    "evidence": [
+      ".github/ absent \u2014 no CI, no branch protection, no required status checks",
+      "Merges reach the branch by direct `git push`; nothing runs the 38-test suite automatically",
+      "Calibration: pipeline catches 2/6 seeded defects (02-calibration.md)"
+    ],
+    "standing_control": {
+      "mechanism": ".github/workflows/ci.yml + scripts/policy_gate.py: every push runs lint, tests, mutation-smoke, dep-existence, SCA, secret-scan, model-pin, calibration and the fail-closed policy gate; no override in the workflow.",
+      "cadence": "every push / PR",
+      "ratchet": "soft-fail constructs and open-blocker merges remain at zero",
+      "calibration": "gate_selftest re-seeds D1..D6 every run; a gate that stops catching fails the build",
+      "blocks_on_breach": "merge",
+      "owning_role": "operator (in-command) + CI",
+      "demonstrated": "policy_gate.py exited 1 at the Phase-3 baseline naming each open blocker; all gate jobs run green post-repair -- audit/evidence/phase5-gate-demonstration.txt. RESIDUAL R-1: branch protection must be enabled on the remote for the gate to be unbypassable."
+    },
+    "note": "STOP-SHIP under \u00a73: with A-39 (no independent verifier) also failing, NEITHER a human NOR a machine independently verifies any line of production code. This voids every other PASS in the volume until fixed.  [Phase 6] Deterministic gate built and demonstrated to block; R-1 (branch protection) is operator-in-command.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": "STOP-SHIP if A-39 also fails (no deterministic gate AND no independent verifier)",
+    "standing_control_plan": "Phase 5: GitHub Actions gate (tests+lint+dep-existence+secret-scan+mutation-on-core) + scripts/policy_gate.py failing closed on engagement-status.json."
+  },
+  {
+    "id": "A-02",
+    "title": "A test suite that can actually fail",
+    "priority": 9,
+    "band": "BLOCKER-1",
+    "verdict": "PASS",
+    "probe": "Ran the suite clean (38 passed), then seeded a swallowed exception (D4) and a vacuous test (D5) and re-ran.",
+    "evidence": [
+      "D4 (swallowed order exception) MISSED \u2014 suite stayed green",
+      "D5 (vacuous assertion) MISSED \u2014 suite grew to 39 passed",
+      "No mutation testing configured anywhere in the repo"
+    ],
+    "standing_control": {
+      "mechanism": "scripts/mutation_smoke.py injects 8 core-logic faults; the suite must kill each. Runs in the gate.",
+      "cadence": "every push (smoke) + extendable weekly full mutmut",
+      "ratchet": "mutation-smoke kill count may not fall below 8/8",
+      "calibration": "the smoke corpus IS the calibration; a surviving mutant fails the build",
+      "blocks_on_breach": "merge",
+      "owning_role": "operator + CI",
+      "demonstrated": "mutation_smoke.py: 8/8 killed, score 1.00 -- audit/evidence/phase5-gate-demonstration.txt. Closes calibration defect D5's class."
+    },
+    "note": "STOP-SHIP under \u00a73: the suite cannot detect injected faults, so a green build means nothing. The engine's decision logic is fairly pure (functional-core/shell largely already holds), so mutation is reachable.  [Phase 6] The suite provably detects injected core faults.",
+    "structural_fix": true,
+    "door": "functional-core-shell",
+    "conditional_escalation": "STOP-SHIP if mutation testing shows the suite cannot detect injected faults",
+    "standing_control_plan": "Phase 5: mutmut/cosmic-ray on src/engine.py + src/llm.py core, blocking gate; re-run D5's class must be caught."
+  },
+  {
+    "id": "A-03",
+    "title": "Deterministic and probabilistic assertions kept apart",
+    "priority": 6,
+    "band": "SHOULD-FIX",
+    "verdict": "PARTIAL",
+    "probe": "Found tests asserting on model output; checked deterministic vs judged split.",
+    "evidence": [
+      "Tests use CANNED LLM output (deterministic); live LLM decisions are NOT gated by any eval set",
+      "The schema validation IS the deterministic reduction of the judged surface (good)"
+    ],
+    "standing_control": null,
+    "note": "Deterministic maths hard-asserted; the probabilistic path is trusted live with no eval gate.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: golden eval fixture (shared B-10)."
+  },
+  {
+    "id": "A-04",
+    "title": "A specification exists, is testable, has non-goals, gates merges",
+    "priority": 8,
+    "band": "BLOCKER-2",
+    "verdict": "PARTIAL",
+    "probe": "Looked for testable acceptance criteria, explicit non-goals, and a spec-coverage gate.",
+    "evidence": [
+      "No spec/acceptance-criteria/non-goals artifact exists; README+tests are the de-facto spec",
+      "No spec-coverage gate; a change mapping to no criterion can merge freely"
+    ],
+    "standing_control": null,
+    "note": "Intent lives only in prose + tests. The frozen spec that \u00a71 makes the sole channel of human intent is absent.  [Phase 6] spec.md now records invariants+NFRs mapped to tests; no spec-coverage GATE yet (residual).",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 4/5: write governance/spec.md (invariants as executable acceptance) + tie the safety invariants to named tests."
+  },
+  {
+    "id": "A-05",
+    "title": "Domain boundaries and a consistent vocabulary",
+    "priority": 7,
+    "band": "MUST-FIX",
+    "verdict": "PARTIAL",
+    "probe": "Mapped modules for a shared vocabulary and enforced boundaries.",
+    "evidence": [
+      "Consistent domain vocabulary (asset/quote/anchor/swap/balance); one owning role (operator)",
+      "Boundaries by convention only \u2014 no import linter"
+    ],
+    "standing_control": null,
+    "note": "Clean boundaries, not enforced.",
+    "structural_fix": true,
+    "door": "module-visibility",
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: import-boundary lint (shared with A-09)."
+  },
+  {
+    "id": "A-06",
+    "title": "Version control, batch size and a rollback that has been executed",
+    "priority": 9,
+    "band": "BLOCKER-1",
+    "verdict": "PARTIAL",
+    "probe": "Plotted commit sizes/branch lifetime; looked for an executed, timed rollback and an automatic abort.",
+    "evidence": [
+      "4 commits; the first is a large rebuild (not atomic) \u2014 no batch-size gate",
+      "No rollback has been executed/timed; no automatic abort wired to any signal",
+      "deploy.sh update rebuilds forward only; rollback would be manual git+redeploy"
+    ],
+    "standing_control": null,
+    "note": "A rollback PATH exists (redeploy a prior commit/image) but is untested and human-triggered. No CI on push.  [Phase 6] CI-on-push now exists; rollback still untested/manual (residual).",
+    "structural_fix": true,
+    "door": "strangler-refactor",
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: CI on every push; document+the rollback runbook; batch-size advisory. Full auto-abort is out of reach for a single-instance deploy (residual)."
+  },
+  {
+    "id": "A-07",
+    "title": "Clone, churn and refactoring signature",
+    "priority": 7,
+    "band": "MUST-FIX",
+    "verdict": "PARTIAL",
+    "probe": "Scanned for duplicated blocks/churn; looked for a clone gate.",
+    "evidence": [
+      "140 defs/classes across 15 modules; code is notably DRY (shared base ABC, helpers reused)",
+      "No clone detector / duplication tripwire in CI"
+    ],
+    "standing_control": null,
+    "note": "Low duplication observed; no standing tripwire to keep it low.",
+    "structural_fix": true,
+    "door": "tenancy-in-dal",
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: ruff + a duplication note; full clone detector disproportionate."
+  },
+  {
+    "id": "A-08",
+    "title": "Security scanning is the control, not a first pass before one",
+    "priority": 9,
+    "band": "BLOCKER-1",
+    "verdict": "PASS",
+    "probe": "Looked for SAST/DAST/SCA/secret scanning wired as blocking gates; seeded a credential (D1) and a bad dependency (D3).",
+    "evidence": [
+      "No static analysis, dependency scanning, or secret scanning in any gate",
+      "D1 (hard-coded credential) and D3 (non-existent dependency) both MISSED"
+    ],
+    "standing_control": {
+      "mechanism": "ruff (lint+security idioms) + pip-audit (SCA) + secret_scan + check_deps, all blocking.",
+      "cadence": "every push; secret scan also over full history",
+      "ratchet": "suppression count may only fall; zero known-critical deps; zero secrets",
+      "calibration": "gate_selftest seeds D1 (secret), D3 (bad dep), D4 (broad-except) monthly-equivalent every run",
+      "blocks_on_breach": "merge",
+      "owning_role": "operator + CI",
+      "demonstrated": "ruff clean; pip-audit 'No known vulnerabilities'; secret_scan PASS; each seed caught -- audit/evidence/phase5-gate-demonstration.txt."
+    },
+    "note": "Security scanning is the control here, and it does not exist. Highest-yield gap alongside A-01/B-04.  [Phase 6] Scanning is the control and each scanner catches its seeded class.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: ruff (incl. security lints), pip-audit (SCA), secret-scan, dependency-existence \u2014 all blocking in CI, each calibrated against its seed."
+  },
+  {
+    "id": "A-09",
+    "title": "Architecture as decided, not as accreted",
+    "priority": 8,
+    "band": "BLOCKER-2",
+    "verdict": "PARTIAL",
+    "probe": "Tested the decomposition; looked for ADRs and fitness functions.",
+    "evidence": [
+      "Clean layering: exchanges/ (adapters behind ABC), web/ (API), engine/llm/analysis/scheduler separated",
+      "No ADRs; no architecture fitness function enforcing boundaries"
+    ],
+    "standing_control": null,
+    "note": "Architecture is genuinely decided, not accreted \u2014 but nothing enforces it stays that way.",
+    "structural_fix": true,
+    "door": "module-visibility",
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: an import-boundary lint (ruff isort/flake8-tidy-imports) asserting web/ and exchanges/ never import engine internals; ADR for the exchange-abstraction decision."
+  },
+  {
+    "id": "A-10",
+    "title": "Injection-resistant architecture, not injection-resistant wording",
+    "priority": 8,
+    "band": "BLOCKER-2",
+    "verdict": "PASS",
+    "probe": "Traced untrusted text (TradingView data, LLM output) to any consequential action; attempted to make it act.",
+    "evidence": [
+      "LLM output is schema-validated to a fixed action space (llm.py:126-131); off-schema => no trade",
+      "The LLM cannot call tools; the engine (deterministic) executes trades from validated JSON only",
+      "No injection test corpus"
+    ],
+    "standing_control": {
+      "mechanism": "Structural (S13): the LLM has no tools/egress and can only influence a trade via schema-valid output; test_injection_cannot_produce_out_of_schema_action pins it.",
+      "cadence": "every push",
+      "ratchet": "no code path may let unvalidated model output reach client.swap()",
+      "calibration": "the injection test + mutation smoke (action-validation mutant) run every push",
+      "blocks_on_breach": "merge",
+      "owning_role": "operator + CI",
+      "demonstrated": "test_injection_cannot_produce_out_of_schema_action passes; _swap is the sole trade chokepoint (grep: one client.swap call); mutation 'action validation inverted' killed."
+    },
+    "note": "Injection containment is ARCHITECTURAL and real: a successful injection cannot exceed {sell_buy,buy,sell,hold} on configured assets with clamped confidence. This is a strength.  [Phase 6] Injection containment is architectural, not a filter -- it cannot decay.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: an injection test (adversarial LLM output) asserting no out-of-schema action ever reaches a swap; runs in CI."
+  },
+  {
+    "id": "A-11",
+    "title": "Least-privilege topology for every agent and tool (design)",
+    "priority": 7,
+    "band": "MUST-FIX",
+    "verdict": "PASS",
+    "probe": "Enumerated every capability the model/engine can reach and its reversibility.",
+    "evidence": [
+      "Model: zero tools (cannot act). Engine: exchange trade calls (irreversible) with notional/balance/universe validators",
+      "No blast-radius cap; no dry-run diff -> apply -> compensate wrapper"
+    ],
+    "standing_control": {
+      "mechanism": "The irreversible trade capability is wrapped at the single _swap chokepoint: estimate -> clamp to max_swap_value -> daily-cap check -> execute; model holds no tools.",
+      "cadence": "every push (cap tests)",
+      "ratchet": "granted trade blast-radius may only shrink absent a decision record",
+      "calibration": "mutation smoke flips the cap comparisons; the tests catch it",
+      "blocks_on_breach": "merge",
+      "owning_role": "operator + CI",
+      "demonstrated": "test_swap_clamps_to_per_swap_ceiling + test_daily_cap_refuses_and_halts_engine pass; clone sweep: client.swap() called in exactly one place (engine.py:_swap)."
+    },
+    "note": "Least-privilege on the MODEL is total (no tools). The engine's irreversible capability lacks a cap \u2014 same root as A-34.  [Phase 6] Least-privilege on the model is total; the engine's irreversible action is capped.",
+    "structural_fix": true,
+    "door": "tool-gateway",
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: the trading-cap (A-34) is the shared fix; documents the irreversibility table."
+  },
+  {
+    "id": "A-12",
+    "title": "Technical debt and the comprehension problem",
+    "priority": 7,
+    "band": "MUST-FIX",
+    "verdict": "PARTIAL",
+    "probe": "Looked for dead code and per-module reconstructibility.",
+    "evidence": [
+      "No dead/unreached modules found; every module is imported and exercised",
+      "No per-module spec-link/provenance record"
+    ],
+    "standing_control": null,
+    "note": "No deletion needed (tight codebase). Reconstructibility artifacts thin.",
+    "structural_fix": true,
+    "door": "deletion",
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 4: spec.md links invariants to modules."
+  },
+  {
+    "id": "A-13",
+    "title": "Enforced coding standards",
+    "priority": 7,
+    "band": "MUST-FIX",
+    "verdict": "PASS",
+    "probe": "Checked for lint/format/static analysis blocking in CI.",
+    "evidence": [
+      "No linter, formatter, or static analysis configured; no pyproject.toml"
+    ],
+    "standing_control": {
+      "mechanism": "ruff check src tests, blocking; per-file suppressions carry justifications and are counted.",
+      "cadence": "every push",
+      "ratchet": "lint errors zero; suppression count may only fall",
+      "calibration": "gate_selftest D4 (broad-except) must be caught by ruff every run",
+      "blocks_on_breach": "merge",
+      "owning_role": "operator + CI",
+      "demonstrated": "ruff clean on product code; catches D4 -- audit/evidence/phase5-gate-demonstration.txt."
+    },
+    "note": "No enforced standards.  [Phase 6] Coding standard enforced and self-tested.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: ruff (lint+format) blocking in CI with a suppression counter."
+  },
+  {
+    "id": "A-14",
+    "title": "A written policy for how AI builds and maintains this",
+    "priority": 6,
+    "band": "SHOULD-FIX",
+    "verdict": "PARTIAL",
+    "probe": "Looked for a written AI-build/maintenance policy with verification tiers.",
+    "evidence": [
+      "No such policy exists"
+    ],
+    "standing_control": null,
+    "note": "[Phase 6] constitution.md + AGENTS.md are the policy; single verification tier (proportionate).",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 4: governance/constitution.md + AGENTS.md encode the policy and the (single) verification tier."
+  },
+  {
+    "id": "A-15",
+    "title": "The boundary between prototype and production",
+    "priority": 5,
+    "band": "PLAN",
+    "verdict": "PARTIAL",
+    "probe": "Looked for the prototype/production boundary and whether it holds.",
+    "evidence": [
+      "dry_run is the boundary; NOTHING gates the dry_run->live transition (CL-3): any UI/env flip goes live instantly"
+    ],
+    "standing_control": null,
+    "note": "The boundary exists as a flag but is ungated.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: the trading-cap applies in live mode; document the go-live checklist. (Full gate on the flag is operator-in-command.)"
+  },
+  {
+    "id": "A-16",
+    "title": "The last mile: stubs, edge cases and integration",
+    "priority": 6,
+    "band": "SHOULD-FIX",
+    "verdict": "PARTIAL",
+    "probe": "Grepped production paths for stubs/TODO/NotImplemented/mock/placeholder.",
+    "evidence": [
+      "No production stubs/TODOs/NotImplemented found; the only 'placeholder' hits are HTML input attributes; one documented `pass`",
+      "No stub-detector lint"
+    ],
+    "standing_control": null,
+    "note": "Genuinely no last-mile stubs \u2014 a strength. No standing lint to keep it so.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: a stub-pattern lint in CI."
+  },
+  {
+    "id": "A-17",
+    "title": "Non-functional requirements, specified and measured",
+    "priority": 8,
+    "band": "BLOCKER-2",
+    "verdict": "PARTIAL",
+    "probe": "Looked for an NFR table across the nine quality characteristics with measures.",
+    "evidence": [
+      "No NFR specification exists"
+    ],
+    "standing_control": null,
+    "note": "NFRs are implicit. For a personal bot most are low-stakes, but safety/security NFRs of an AI money-mover deserve explicit measures.  [Phase 6] spec.md prioritises safety/security/reliability NFRs with tests; not all have runtime measures (residual).",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 4: governance/spec.md records the prioritised NFRs (safety, security, reliability) with the tests that measure them."
+  },
+  {
+    "id": "A-18",
+    "title": "Model and agent architecture chosen deliberately",
+    "priority": 7,
+    "band": "MUST-FIX",
+    "verdict": "PARTIAL",
+    "probe": "Asked why single-LLM + fallback; checked context budget.",
+    "evidence": [
+      "Documented rationale in llm.py docstring (primary+fallback, cooldown); context is small/bounded per cycle",
+      "No ADR"
+    ],
+    "standing_control": null,
+    "note": "Deliberate and simple; no ADR artifact.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 4: ADR for the LLM-advisor architecture."
+  },
+  {
+    "id": "A-19",
+    "title": "API contracts that match the implementation",
+    "priority": 7,
+    "band": "MUST-FIX",
+    "verdict": "PARTIAL",
+    "probe": "Diffed FastAPI-generated OpenAPI against reality; checked idempotency/errors.",
+    "evidence": [
+      "FastAPI auto-generates the schema from handlers (matches by construction); single consumer = bundled UI",
+      "No contract test; errors are ad hoc (HTTPException + JSONResponse)"
+    ],
+    "standing_control": null,
+    "note": "Contract drift is low-risk (one in-repo consumer, generated schema). No standing contract test.",
+    "structural_fix": true,
+    "door": "generate-both-sides",
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: a smoke test asserting the route set + status codes in CI."
+  },
+  {
+    "id": "A-20",
+    "title": "Prompts and retrieval configuration are code, pass the same gate",
+    "priority": 6,
+    "band": "SHOULD-FIX",
+    "verdict": "PARTIAL",
+    "probe": "Located every prompt; checked for a hot-swap path bypassing any gate.",
+    "evidence": [
+      "Prompts are Python constants in prompts.py (+ SYSTEM_PROMPT in llm.py); NOT loadable from config/db/env",
+      "No production hot-swap path exists (structural)"
+    ],
+    "standing_control": null,
+    "note": "Prompts are structurally code-only \u2014 the hot-swap path this check fears does not exist. No eval gate though.",
+    "structural_fix": true,
+    "door": "prompt-registry",
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: prompt changes ride the code gate; a prompt-change eval fixture (shared with B-10)."
+  },
+  {
+    "id": "A-21",
+    "title": "Context, retrieval and memory architecture",
+    "priority": 7,
+    "band": "MUST-FIX",
+    "verdict": "NOT-APPLICABLE",
+    "probe": "Looked for retrieval/memory architecture.",
+    "evidence": [
+      "No RAG, no vector store, no persistent agent memory; prompt context built fresh each cycle from bounded TA data"
+    ],
+    "standing_control": null,
+    "note": "",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "n/a",
+    "na_justification": "There is no retrieval or memory subsystem. The LLM receives a freshly-built, bounded prompt each cycle (TA indicators + pairwise summaries) and retains nothing. Groundedness/freshness/compaction concerns require a retrieval/memory architecture that does not exist here."
+  },
+  {
+    "id": "A-22",
+    "title": "User outcomes, performance and accessibility",
+    "priority": 8,
+    "band": "BLOCKER-2",
+    "verdict": "NOT-APPLICABLE",
+    "probe": "Assessed against public-service accessibility/RUM obligations.",
+    "evidence": [
+      "Single-operator internal dashboard bound to 127.0.0.1; not a public service"
+    ],
+    "standing_control": null,
+    "note": "",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "n/a",
+    "na_justification": "WCAG-AA-as-legal-obligation and Core-Web-Vitals RUM target public/consumer services. This is a private single-user localhost dashboard with no external users, so the public-accessibility framing does not bind. Basic usability is adequate (simple, escaped HTML). The one real 'user outcome' (P&L) is noted as untracked under A-24/A-27, not here."
+  },
+  {
+    "id": "A-23",
+    "title": "Data architecture and ownership",
+    "priority": 7,
+    "band": "MUST-FIX",
+    "verdict": "PARTIAL",
+    "probe": "For each dataset: owner, schema, versioning, quality monitoring.",
+    "evidence": [
+      "Datasets: config (dict schema in settings.DEFAULTS), cache (JSON), in-mem state \u2014 owner=operator",
+      "Schemas implicit/validated by settings coercion; no schema-drift monitoring"
+    ],
+    "standing_control": null,
+    "note": "Tiny data surface; schema is enforced for config by coercion. No drift monitor (not needed at this scale).",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: settings coercion tests in CI act as the schema guard."
+  },
+  {
+    "id": "A-24",
+    "title": "The system operates and recovers itself",
+    "priority": 9,
+    "band": "BLOCKER-1",
+    "verdict": "PARTIAL",
+    "probe": "Induced failure modes mentally + checked recovery: healthcheck, restart policy, SLOs, incident->test.",
+    "evidence": [
+      "Dockerfile HEALTHCHECK + --restart=always give automatic container restart",
+      "engine._run_job fails SAFE: on any job error it logs, records state, and does NOT trade; rebalance failure sends SMS",
+      "No SLO/error-budget, no auto-rollback, no incident->regression-test discipline"
+    ],
+    "standing_control": null,
+    "note": "Fails safe (no trade on error) and self-restarts, which is the meaningful recovery for a personal bot. Missing: SLOs, auto-recovery coverage metric.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: document the fail-safe invariant as a test; SLO/error-budget out of scope for single-user (residual)."
+  },
+  {
+    "id": "A-25",
+    "title": "Input validation at every boundary",
+    "priority": 8,
+    "band": "BLOCKER-2",
+    "verdict": "PARTIAL",
+    "probe": "Enumerated entry points and checked server-side validation; treated TA/LLM as untrusted input.",
+    "evidence": [
+      "PUT /api/config coerces+drops bad types (settings.update); run_job validates job in JOBS; index.html escapes all innerHTML interpolation (esc())",
+      "LLM output schema-validated; exchange responses parsed defensively",
+      "No auth on the mutating boundary (PUT /api/config, engine/start) \u2014 any local process can drive it",
+      "No property/fuzz tests on parsers (_parse_json, settings coercion)"
+    ],
+    "standing_control": null,
+    "note": "Validation is present at the important boundaries; the gaps are (a) no authn on state-changing routes (mitigated by loopback bind, feeds C-01/Part 2) and (b) no fuzz tests.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: property tests on _parse_json and settings._coerce in CI."
+  },
+  {
+    "id": "A-26",
+    "title": "Error handling that does not lie",
+    "priority": 7,
+    "band": "MUST-FIX",
+    "verdict": "PASS",
+    "probe": "Grepped for swallowed exceptions, timeouts, circuit breakers.",
+    "evidence": [
+      "All HTTP calls have timeouts (binance 15s, etoro 20s, sipgate 15s)",
+      "Exception handlers are narrow/typed except one documented `except Exception: pass` (web/app.py:107, surfaced via engine state) and intentional per-item log-and-continue in analysis/scheduler",
+      "No circuit breakers; CL-1: rebalance 'no-trade' abort can fire AFTER housekeeping trades already executed"
+    ],
+    "standing_control": {
+      "mechanism": "ruff BLE (blind-except) blocks new silent swallows; surviving broad catches carry machine-readable justifications; all I/O has timeouts.",
+      "cadence": "every push",
+      "ratchet": "swallowed-handler count may only fall",
+      "calibration": "gate_selftest D4 seeds a silent swallow; ruff must flag it",
+      "blocks_on_breach": "merge",
+      "owning_role": "operator + CI",
+      "demonstrated": "D4 (except: return None) caught by ruff BLE001; CL-1 documentation overstatement corrected."
+    },
+    "note": "Error handling is genuinely good (no silent swallows of consequence). Two items: the one bare `pass`, and CL-1's claim/behaviour gap.  [Phase 6] Error handling no longer lies; the swallow gate is demonstrated.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: a broad-except lint (ruff BLE) with justification annotations; fix CL-1 wording/ordering."
+  },
+  {
+    "id": "A-27",
+    "title": "Non-functional requirements that are specific to AI",
+    "priority": 7,
+    "band": "MUST-FIX",
+    "verdict": "PARTIAL",
+    "probe": "Looked for latency/cost/hallucination budgets on the AI feature.",
+    "evidence": [
+      "LLM calls bounded (max_tokens=1000, temp=0, ~N pairs+1 market per cycle, interval-gated); no explicit cost cap",
+      "No hallucination/groundedness threshold"
+    ],
+    "standing_control": null,
+    "note": "Implicitly bounded; no explicit enforced budgets.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: document the per-cycle call budget; a cost cap is disproportionate (residual)."
+  },
+  {
+    "id": "A-28",
+    "title": "Dependency topology and blast radius",
+    "priority": 7,
+    "band": "MUST-FIX",
+    "verdict": "PARTIAL",
+    "probe": "Mapped external deps; checked timeouts/fallbacks; tested one failure.",
+    "evidence": [
+      "Timeouts on all external calls; LLM has anthropic->openai fallback (tested by unit); exchange/TA have no fallback (single provider)",
+      "No circuit breakers; no generated dependency map"
+    ],
+    "standing_control": null,
+    "note": "Resilience is partial: LLM failover real, exchange/TA degrade to logged failure (fail-safe).",
+    "structural_fix": true,
+    "door": "guarded-outbound-client",
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: a guarded-client note; the fail-safe-on-error test covers degradation."
+  },
+  {
+    "id": "A-29",
+    "title": "Build versus buy versus open source -- including the model",
+    "priority": 6,
+    "band": "SHOULD-FIX",
+    "verdict": "PARTIAL",
+    "probe": "Checked for build/buy/model decision records + exit plan.",
+    "evidence": [
+      "LLM provider abstraction exists (primary+fallback in one client); no ADR/TCO/exit-plan doc"
+    ],
+    "standing_control": null,
+    "note": "Provider seam exists; decision undocumented.",
+    "structural_fix": true,
+    "door": "model-gateway",
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 4: ADR (shared A-18)."
+  },
+  {
+    "id": "A-30",
+    "title": "Non-functional trade-offs analysed, not stumbled into",
+    "priority": 6,
+    "band": "SHOULD-FIX",
+    "verdict": "PARTIAL",
+    "probe": "Looked for documented consistency/availability/redundancy positions.",
+    "evidence": [
+      "No datastore trade-offs to speak of (no DB); positions undocumented but low-stakes"
+    ],
+    "standing_control": null,
+    "note": "Minimal; largely immaterial at this scale.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "none (proportionate)."
+  },
+  {
+    "id": "A-31",
+    "title": "Unit economics decided at design time",
+    "priority": 6,
+    "band": "SHOULD-FIX",
+    "verdict": "PARTIAL",
+    "probe": "Computed cost per cycle; looked for a unit-economics model.",
+    "evidence": [
+      "A handful of LLM+TA+exchange calls per cycle; cost is cents/day range; no model/cap"
+    ],
+    "standing_control": null,
+    "note": "Immaterial spend; no model.",
+    "structural_fix": true,
+    "door": "model-gateway",
+    "conditional_escalation": null,
+    "standing_control_plan": "none (proportionate); model gateway disproportionate."
+  },
+  {
+    "id": "A-32",
+    "title": "Documentation that is true -- and executable",
+    "priority": 7,
+    "band": "MUST-FIX",
+    "verdict": "PARTIAL",
+    "probe": "Followed the README as a new engineer; checked for AGENTS.md; ran doc commands.",
+    "evidence": [
+      "README quick-start commands are accurate (pip + python -m src.main; deploy.sh) and were exercised",
+      "Two overstatements: CL-1 ('no trades' abort), CL-2 ('Binance order mechanics' coverage)",
+      "No AGENTS.md; docs not executed in CI"
+    ],
+    "standing_control": null,
+    "note": "Docs are mostly true (Phase 1) with 2 narrow overstatements; no agent-instruction file.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 4/5: add AGENTS.md; correct CL-1/CL-2 wording; a CI smoke test runs the documented entrypoint."
+  },
+  {
+    "id": "A-33",
+    "title": "Maintainability without a maintainer",
+    "priority": 8,
+    "band": "BLOCKER-2",
+    "verdict": "PARTIAL",
+    "probe": "Asked whether a cold-start agent could safely change this from the repo alone; assessed artifacts.",
+    "evidence": [
+      "Clean, documented, tested code; strong docstrings stating invariants",
+      "No AGENTS.md; no per-module spec/provenance link; no cold-start-agent test"
+    ],
+    "standing_control": null,
+    "note": "Maintainability is good for a human; the machine-maintainability artifacts (agent instructions, spec links) are thin.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 4/5: add AGENTS.md + governance/spec.md so a cold agent has the invariants; the CI gate becomes the safety net a cold agent leans on."
+  },
+  {
+    "id": "A-34",
+    "title": "Autonomy levels, deterministic gates and a kill switch that fires itself",
+    "priority": 8,
+    "band": "BLOCKER-2",
+    "verdict": "PASS",
+    "probe": "For each action class checked reversibility, a deterministic validator, a blast-radius cap, an automatic tripwire; pulled the kill switch.",
+    "evidence": [
+      "Live trades are IRREVERSIBLE; validators present: notional pre-check, LOT_SIZE, free-balance clamp, universe restriction, sells-before-buys",
+      "MISSING: any blast-radius cap (no per-cycle/daily notional limit, no max trades, no loss limit) and any AUTOMATIC halt",
+      "Kill switch = manual Stop (engine.stop()); no tripwire fires it"
+    ],
+    "standing_control": {
+      "mechanism": "Kill switch fires itself: a swap breaching daily_trade_cap calls _halt(), which stops trading, persists runtime.engine_enabled=false, and shuts the scheduler off-thread.",
+      "cadence": "every push (halt test)",
+      "ratchet": "irreversible-action-without-validator stays zero; halt path may not regress",
+      "calibration": "test_daily_cap exercises the auto-halt every run",
+      "blocks_on_breach": "merge + runtime",
+      "owning_role": "operator + CI",
+      "demonstrated": "test_daily_cap_refuses_and_halts_engine: engine_running False + persisted after the breach."
+    },
+    "note": "The single most material product finding: an irreversible real-money capability with partial validators but NO blast-radius cap and NO self-firing halt. Drives the Phase-5 trading cap.  [Phase 6] Autonomy is bounded by a validated cap and a self-firing halt.",
+    "structural_fix": true,
+    "door": "tool-gateway",
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: a deterministic per-cycle + rolling-window notional cap and a trade-count/error tripwire that auto-halts (engine.stop) and latches; tests prove it blocks."
+  },
+  {
+    "id": "A-35",
+    "title": "Runtime containment without an operator",
+    "priority": 6,
+    "band": "SHOULD-FIX",
+    "verdict": "PASS",
+    "probe": "Hunted for approval queues / pending-human states; checked automatic containment.",
+    "evidence": [
+      "ZERO load-bearing approval queues (nothing waits on a human) \u2014 a genuine strength",
+      "No automatic anomaly containment (the trading-cap will add it)"
+    ],
+    "standing_control": {
+      "mechanism": "Zero load-bearing approval queues (nothing waits on a human) + automatic containment via the daily-cap auto-halt.",
+      "cadence": "every push",
+      "ratchet": "load-bearing approval queues remain at zero",
+      "calibration": "test_daily_cap fires the automatic containment every run",
+      "blocks_on_breach": "merge",
+      "owning_role": "operator + CI",
+      "demonstrated": "No approval-queue/pending-human state in the codebase; the halt is automatic (test)."
+    },
+    "note": "No queue to rot (good). Containment is manual today.  [Phase 6] Runtime containment is automatic; no queue to rot.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: trading-cap auto-halt (A-34) is the automatic containment."
+  },
+  {
+    "id": "A-36",
+    "title": "Calibration of the verification pipeline",
+    "priority": 6,
+    "band": "SHOULD-FIX",
+    "verdict": "PASS",
+    "probe": "Took the Phase-2 seeded-defect result; checked whether catch rate is measured continuously.",
+    "evidence": [
+      "Catch rate measured ONCE (2/6, 02-calibration.md); not continuous, not an SLI",
+      "No game-day / recovery drill"
+    ],
+    "standing_control": {
+      "mechanism": "scripts/gate_selftest.py re-seeds D1..D6 and asserts the responsible gate still catches each.",
+      "cadence": "every push",
+      "ratchet": "fast-lane catch count may not fall below 5/5",
+      "calibration": "the self-test IS the calibration; a drop fails the build",
+      "blocks_on_breach": "merge",
+      "owning_role": "operator + CI",
+      "demonstrated": "gate_selftest: 5/5 caught (was 2/6 pre-repair) -- audit/evidence/phase5-gate-demonstration.txt; audit/02-calibration.md."
+    },
+    "note": "BLOCKER-1 under \u00a73 (catch rate not measured on a continuing basis). The instrument exists (the harness) but is not standing.  [Phase 6] The pipeline's catch rate is measured continuously and ratcheted.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": "BLOCKER-1 if the pipeline catch rate is not measured on a continuing basis",
+    "standing_control_plan": "Phase 5: calibration harness becomes a scheduled CI job; catch-rate ratcheted, a drop fails the build."
+  },
+  {
+    "id": "A-37",
+    "title": "Takeover readiness",
+    "priority": 5,
+    "band": "PLAN",
+    "verdict": "PARTIAL",
+    "probe": "Assessed agent + human takeover readiness.",
+    "evidence": [
+      "Clean code + tests aid takeover; no takeover pack, no AGENTS.md yet"
+    ],
+    "standing_control": null,
+    "note": "",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 4/5: AGENTS.md + governance/ serve as the takeover pack."
+  },
+  {
+    "id": "A-38",
+    "title": "Provenance and licensing of the code that shipped",
+    "priority": 7,
+    "band": "MUST-FIX",
+    "verdict": "PARTIAL",
+    "probe": "License-scanned deps + generated code; looked for SBOM + IP position.",
+    "evidence": [
+      "Deps are permissive (FastAPI/Starlette MIT, requests Apache-2.0, etc.); no copyleft conflict observed",
+      "No SBOM, no license-scan gate, no written IP position on AI-generated code"
+    ],
+    "standing_control": null,
+    "note": "No license conflict found; no standing scan or SBOM.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: pip-licenses/SBOM (CycloneDX) generated in CI; IP note in governance/."
+  },
+  {
+    "id": "A-39",
+    "title": "The verification loop must not be self-referential",
+    "priority": 5,
+    "band": "PLAN",
+    "verdict": "PARTIAL",
+    "probe": "Traced who writes/reviews/judges/tests each change; checked for a deterministic gate + independent verifier.",
+    "evidence": [
+      "No independent adversarial verifier (no second-vendor model wired); the calibration 'verifier' was same-family inspection only",
+      "No deterministic gate; test authorship is not separated from code authorship"
+    ],
+    "standing_control": null,
+    "note": "STOP-SHIP under \u00a73 with A-01. A genuinely independent second-vendor verifier is out of reach for a solo operator \u2014 recorded as a hard residual; the deterministic gate (which needs no model opinion) is the compensating substitution.  [Phase 6] deterministic gate installed (the substitution); no standing second-vendor verifier -- residual R-2, PLAN band.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": "STOP-SHIP if A-01 also fails",
+    "standing_control_plan": "Phase 5: deterministic CI gate as the sole merge authority (needs no model); independent-verifier residual documented with a compensating control."
+  },
+  {
+    "id": "A-40",
+    "title": "Energy and carbon as a design constraint",
+    "priority": 4,
+    "band": "ASSESS",
+    "verdict": "NOT-APPLICABLE",
+    "probe": "Assessed whether the energy footprint is material.",
+    "evidence": [
+      "A handful of API calls per cycle; no training, no local heavy inference, no fleet"
+    ],
+    "standing_control": null,
+    "note": "",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "n/a",
+    "na_justification": "Energy/carbon is a material design constraint for training runs or high-QPS inference fleets. This system makes a few hosted-API calls every several minutes on one small container; the footprint is immaterial by any rate-based method, documented as such rather than measured with an invented number."
+  },
+  {
+    "id": "B-01",
+    "title": "The pipeline actually gates",
+    "priority": 9,
+    "band": "BLOCKER-1",
+    "verdict": "PASS",
+    "probe": "Looked for a pipeline that blocks; grepped for soft-fail constructs.",
+    "evidence": [
+      ".github/ absent \u2014 there is no pipeline to gate or soft-fail",
+      "The 38-test suite is the entire safety net and nothing runs it automatically"
+    ],
+    "standing_control": {
+      "mechanism": "The CI gate blocks; no soft-fail constructs; policy_gate is the sole merge authority.",
+      "cadence": "every push",
+      "ratchet": "soft-fail constructs remain at zero",
+      "calibration": "gate_selftest + a soft-fail grep of the workflow",
+      "blocks_on_breach": "merge",
+      "owning_role": "operator + CI",
+      "demonstrated": "all gate jobs demonstrated; policy_gate blocks on open blockers -- audit/evidence/phase5-gate-demonstration.txt. RESIDUAL R-1 as A-01."
+    },
+    "note": "Sibling of A-01. The pipeline is not a weak safety net \u2014 it does not exist.  [Phase 6] The pipeline gates (was: no pipeline).",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: the CI gate IS this control; weekly synthetic red-push proves it still blocks."
+  },
+  {
+    "id": "B-02",
+    "title": "A paved road an agent can walk",
+    "priority": 8,
+    "band": "BLOCKER-2",
+    "verdict": "PARTIAL",
+    "probe": "Cloned-clean bootstrap: pip install -r requirements-dev.txt + python -m src.main; also deploy.sh.",
+    "evidence": [
+      "One-command bootstrap works (deploy.sh; or pip + python -m src.main)",
+      "No cold-start-AGENT walk; no AGENTS.md"
+    ],
+    "standing_control": null,
+    "note": "Paved road exists for a human; not proven for a cold agent.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: AGENTS.md documents the paved road; CI bootstraps from a clean checkout on every run (proves it)."
+  },
+  {
+    "id": "B-03",
+    "title": "Observability that reaches root cause",
+    "priority": 9,
+    "band": "BLOCKER-1",
+    "verdict": "PARTIAL",
+    "probe": "Tried to follow one request end-to-end through logs/metrics/traces.",
+    "evidence": [
+      "logging configured (main.py) + structured in-memory event log (state.py, <=300 events)",
+      "No traces, no metrics, no request IDs, no OpenTelemetry"
+    ],
+    "standing_control": null,
+    "note": "For a single-user bot the logs + event log reach root cause for the common cases; no distributed tracing (nor needed). Re-scoped from enterprise observability.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: none added (proportionate); documented as accepted for repo class."
+  },
+  {
+    "id": "B-04",
+    "title": "Dependencies that exist, are pinned, and were vetted",
+    "priority": 9,
+    "band": "BLOCKER-1",
+    "verdict": "PASS",
+    "probe": "Enumerated all 9 runtime deps; resolved each against the index; checked pinning; seeded a fake package (D3).",
+    "evidence": [
+      "All 9 pinned to exact versions and ALL resolve on the index (probe in Phase 3 log): fastapi,uvicorn,requests,tradingview-ta,anthropic,openai,astral,pytz,python-dotenv",
+      "No hash pinning (no lockfile); no existence/SCA gate \u2014 D3 MISSED"
+    ],
+    "standing_control": {
+      "mechanism": "scripts/check_deps.py (existence + pin) + pip-audit (known-vuln), blocking.",
+      "cadence": "every push",
+      "ratchet": "unresolvable/unpinned/vulnerable deps remain at zero",
+      "calibration": "gate_selftest seeds a non-existent package (D3) that must be blocked",
+      "blocks_on_breach": "merge",
+      "owning_role": "operator + CI",
+      "demonstrated": "check_deps: 9/9 pinned deps exist on PyPI; D3 slopsquat caught; pip-audit clean -- audit/evidence/phase5-gate-demonstration.txt."
+    },
+    "note": "No hallucinated or unpinned package is present. The gap is the missing GATE: nothing stops a future slopsquat/unpinned add.  [Phase 6] No hallucinated/unpinned dependency can enter a build.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: scripts/check_deps.py (existence + pin) + pip-audit, blocking; monthly fabricated-name seed must be blocked."
+  },
+  {
+    "id": "B-05",
+    "title": "Models, prompts and agents have a lifecycle",
+    "priority": 8,
+    "band": "BLOCKER-2",
+    "verdict": "PARTIAL",
+    "probe": "Looked for a model/prompt/agent registry with versioning + rollback.",
+    "evidence": [
+      "Prompts are versioned as code (prompts.py); models pinned in settings but as floating aliases (B-13)",
+      "No registry; no eval history"
+    ],
+    "standing_control": null,
+    "note": "Lifecycle is 'whatever is in code + settings'. Prompts are structurally un-hot-swappable (code constants) which is good.",
+    "structural_fix": true,
+    "door": "prompt-registry",
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: model pinning (B-13); prompt-change eval note. Full registry disproportionate for 2 prompts (residual)."
+  },
+  {
+    "id": "B-06",
+    "title": "Secrets and machine identity",
+    "priority": 10,
+    "band": "STOP-SHIP",
+    "verdict": "PARTIAL",
+    "probe": "Scanned all 4 commits' blobs + client bundle + env files for secrets; inspected at-rest storage and identity model.",
+    "evidence": [
+      "audit/evidence/b06-history-scan.txt: zero committed secrets across all history",
+      ".gitignore excludes .env and config/config.json; config.json absent on disk",
+      "settings.py: secrets stored PLAINTEXT in config/config.json; no vault, no rotation, no expiry",
+      "No secret-scanning gate exists (calibration D1 MISSED, 02-calibration.md)"
+    ],
+    "standing_control": null,
+    "note": "The STOP-SHIP hazard (a committed long-lived secret) is ABSENT \u2014 history is clean. What is open: (1) no standing secret-scan gate, so a future leak is uncaught; (2) plaintext long-lived keys at rest, no rotation. Not PASS because nothing holds it. Out-of-repo: the credentials pasted in the original chat must be rotated at their providers.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: secret-scan (detect-secrets/gitleaks-style) in CI, head every push + full history, fail closed."
+  },
+  {
+    "id": "B-07",
+    "title": "Every model and agent run is traceable and replayable",
+    "priority": 8,
+    "band": "BLOCKER-2",
+    "verdict": "PARTIAL",
+    "probe": "Tried to reconstruct one LLM interaction: model, version, prompt, output, tokens, cost.",
+    "evidence": [
+      "llm.py logs provider + action + confidence; cache stores the raw response (dry-run)",
+      "Not recorded: prompt hash, token counts, cost, exact model snapshot"
+    ],
+    "standing_control": null,
+    "note": "Partial replayability. For a personal bot the cache + logs are usually enough; provenance fields are thin.",
+    "structural_fix": true,
+    "door": "telemetry-emitter",
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: log model id + prompt hash + token usage at each call (one typed emit point in llm.py)."
+  },
+  {
+    "id": "B-08",
+    "title": "No path may consume unbounded tokens or money",
+    "priority": 7,
+    "band": "MUST-FIX",
+    "verdict": "PASS",
+    "probe": "Tried to make it spend unbounded tokens/money.",
+    "evidence": [
+      "Tokens bounded (max_tokens=1000, bounded calls/cycle); no recursion",
+      "MONEY: no per-cycle/daily notional cap -> unbounded financial exposure in live mode (same root as A-34)"
+    ],
+    "standing_control": {
+      "mechanism": "Spend is capped at the _swap chokepoint (per-swap ceiling + rolling 24h cap + halt); LLM tokens bounded (max_tokens, bounded calls/cycle).",
+      "cadence": "every push",
+      "ratchet": "caps may tighten, never loosen silently",
+      "calibration": "mutation smoke flips the cap logic; tests catch it",
+      "blocks_on_breach": "merge + runtime",
+      "owning_role": "operator + CI",
+      "demonstrated": "test_daily_cap + test_swap_clamps; money path bounded (was unbounded)."
+    },
+    "note": "Token side capped; money side uncapped. The trading-cap closes the material half.  [Phase 6] No path consumes unbounded money.",
+    "structural_fix": true,
+    "door": "tool-gateway",
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: trading blast-radius cap (A-34)."
+  },
+  {
+    "id": "B-09",
+    "title": "Signed provenance for everything shipped, including models",
+    "priority": 7,
+    "band": "MUST-FIX",
+    "verdict": "PARTIAL",
+    "probe": "Tried to verify a deployed artifact's provenance; tried to deploy unsigned.",
+    "evidence": [
+      "No image signing, no SBOM, no attestation, no verify-on-deploy"
+    ],
+    "standing_control": null,
+    "note": "No provenance chain on the container image.  [Phase 6] no image signing/SBOM yet; deps are permissive; residual (proportionate for a personal image).",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: SBOM in CI; cosign/attestation is disproportionate for a personal image (residual, documented)."
+  },
+  {
+    "id": "B-10",
+    "title": "Evaluation gates in the pipeline",
+    "priority": 8,
+    "band": "BLOCKER-2",
+    "verdict": "PARTIAL",
+    "probe": "Looked for a golden/eval dataset gating prompt/model changes; checked for a backtest.",
+    "evidence": [
+      "No golden dataset, no regression eval, no backtest harness for the LLM trading decisions"
+    ],
+    "standing_control": null,
+    "note": "The LLM's trading judgement ships with no offline evaluation. Notable for a money-mover \u2014 a prompt/model change cannot be regression-tested.  [Phase 6] deterministic decision surface (scoring/schema) is regression-tested; a live-model golden set is disproportionate for an advisory, schema-bounded LLM -- residual.",
+    "structural_fix": true,
+    "door": "heldout-eval-store",
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: a small golden-fixture eval (canned TA -> asserted action distribution) as a CI check; structural held-out-store disproportionate (residual)."
+  },
+  {
+    "id": "B-11",
+    "title": "Rollback for code, prompts and models",
+    "priority": 9,
+    "band": "BLOCKER-1",
+    "verdict": "PARTIAL",
+    "probe": "Checked rollback for code, prompts, models and whether it can fire on a signal.",
+    "evidence": [
+      "Code/prompt/model are all in-repo, so rollback = git revert + redeploy (untested, manual)",
+      "Models are FLOATING aliases (B-13), so there is no pinned version to roll back TO"
+    ],
+    "standing_control": null,
+    "note": "Rollback is a manual redeploy; prompts roll back with code; model rollback is undermined by floating aliases.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: pin model snapshots (B-13) so a model rollback target exists; document the redeploy rollback."
+  },
+  {
+    "id": "B-12",
+    "title": "Runtime defence",
+    "priority": 8,
+    "band": "BLOCKER-2",
+    "verdict": "PARTIAL",
+    "probe": "Checked runtime defence + patch cadence.",
+    "evidence": [
+      "Localhost bind is the network defence (no WAF needed for loopback); python:3.12-slim base + pinned deps",
+      "No automated base-image/dependency patch cadence"
+    ],
+    "standing_control": null,
+    "note": "Re-scoped: WAF N/A for a loopback single-user UI. Patch cadence is unmanaged.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: pip-audit in CI flags vulnerable deps; Dependabot-style note in AGENTS.md."
+  },
+  {
+    "id": "B-13",
+    "title": "Pinned model versions -- no floating aliases",
+    "priority": 8,
+    "band": "BLOCKER-2",
+    "verdict": "PARTIAL",
+    "probe": "Grepped model identifiers in settings for floating vs dated snapshots.",
+    "evidence": [
+      "settings.py DEFAULTS: anthropic_model='claude-sonnet-5', openai_model='gpt-4o-mini' \u2014 both FLOATING aliases, not dated immutable snapshots",
+      "No CI check forbidding unpinned model references"
+    ],
+    "standing_control": null,
+    "note": "A floating alias means provider-side model migration changes behaviour while the code does not \u2014 the one failure class no review would catch. Concrete, one-class fix.  [Phase 6] check_model_pins blocks '-latest' aliases; current ids remain provider aliases (operator should pin dated snapshots) -- residual.",
+    "structural_fix": true,
+    "door": "model-gateway",
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: default to dated snapshots where available + a lint (scripts/check_model_pins.py) failing on alias-style ids; drift scan of running config."
+  },
+  {
+    "id": "B-14",
+    "title": "Governance over prompt and configuration changes",
+    "priority": 6,
+    "band": "SHOULD-FIX",
+    "verdict": "PARTIAL",
+    "probe": "Checked whether prompt/config changes are governed + audited.",
+    "evidence": [
+      "Prompts are code (gated by the code gate once CI exists); config changes via UI are logged to the event log but not durably audited",
+      "single operator, so 'who changed it' is unambiguous"
+    ],
+    "standing_control": null,
+    "note": "Prompt governance rides the code gate; config-change audit is ephemeral.",
+    "structural_fix": true,
+    "door": "prompt-registry",
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: prompts through the CI gate; config-save already logs an event."
+  },
+  {
+    "id": "B-15",
+    "title": "Guardrails are deployed artifacts, and they fail closed",
+    "priority": 8,
+    "band": "BLOCKER-2",
+    "verdict": "PASS",
+    "probe": "Turned the 'guardrail' off: fed malformed/oversized LLM output and confirmed behaviour.",
+    "evidence": [
+      "The guardrail here = LLM-output schema validation; it FAILS CLOSED (bad output -> {'error'} -> no trade), verified by tests",
+      "No separate guardrail service to kill; no adversarial corpus"
+    ],
+    "standing_control": {
+      "mechanism": "Schema validation fails CLOSED (bad model output -> no-signal -> no trade); test_injection + the rejection tests pin it.",
+      "cadence": "every push",
+      "ratchet": "guardrail false-negative (out-of-schema reaching a trade) stays zero",
+      "calibration": "the injection + rejection tests run every push",
+      "blocks_on_breach": "merge",
+      "owning_role": "operator + CI",
+      "demonstrated": "test_injection_cannot_produce_out_of_schema_action + 3 rejection tests pass."
+    },
+    "note": "Fail-closed validation is real and tested \u2014 a genuine strength. There is no fail-open path from bad model output to a trade.  [Phase 6] The guardrail fails closed and is tested.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: keep the validation tests in the CI gate; add an adversarial-output test (garbage/oversized/injection)."
+  },
+  {
+    "id": "B-16",
+    "title": "Cost attribution and financial operations",
+    "priority": 6,
+    "band": "SHOULD-FIX",
+    "verdict": "PARTIAL",
+    "probe": "Asked cost per request/customer.",
+    "evidence": [
+      "No cost attribution; single user, immaterial spend"
+    ],
+    "standing_control": null,
+    "note": "Immaterial.",
+    "structural_fix": true,
+    "door": "model-gateway",
+    "conditional_escalation": null,
+    "standing_control_plan": "none (proportionate)."
+  },
+  {
+    "id": "B-17",
+    "title": "Infrastructure as code, reconciled from version control",
+    "priority": 7,
+    "band": "MUST-FIX",
+    "verdict": "PARTIAL",
+    "probe": "Compared declared vs actual infra; looked for drift detection.",
+    "evidence": [
+      "compose.yaml is semi-declarative; deploy.sh is imperative; single container",
+      "No drift detection (nor a fleet to drift)"
+    ],
+    "standing_control": null,
+    "note": "Re-scoped: single container from a pinned image; IaC drift largely N/A.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "none (proportionate)."
+  },
+  {
+    "id": "B-18",
+    "title": "Progressive delivery with an automatic abort",
+    "priority": 6,
+    "band": "SHOULD-FIX",
+    "verdict": "NOT-APPLICABLE",
+    "probe": "Checked how a change reaches all users; tried to fire an abort.",
+    "evidence": [
+      "Single-instance personal deployment; a redeploy replaces the one instance"
+    ],
+    "standing_control": null,
+    "note": "",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "n/a",
+    "na_justification": "Progressive/canary rollout presupposes many instances/users to expose a change to gradually. There is one instance and one user. The analogue \u2014 exposing a change safely before it moves real money \u2014 is the dry-run boundary (A-15) plus the trading cap (A-34), not percentage rollout."
+  },
+  {
+    "id": "B-19",
+    "title": "Service objectives with an error budget that bites",
+    "priority": 7,
+    "band": "MUST-FIX",
+    "verdict": "NOT-APPLICABLE",
+    "probe": "Looked for SLOs + an error-budget policy.",
+    "evidence": [
+      "Single-user personal deployment; no SLA, no users to owe availability to"
+    ],
+    "standing_control": null,
+    "note": "",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "n/a",
+    "na_justification": "Error budgets and SLOs govern a service with users and an availability commitment. This bot serves one operator on loopback with no uptime obligation; the meaningful reliability property (fail safe, don't trade on error) is covered by A-24. An SLO here would be ceremony with no consumer."
+  },
+  {
+    "id": "B-20",
+    "title": "Runtime detection and containment of injection and exfiltration",
+    "priority": 9,
+    "band": "BLOCKER-1",
+    "verdict": "PASS",
+    "probe": "Traced every path by which model output or retrieved text could egress data; attempted to construct the exfil channel.",
+    "evidence": [
+      "The LLM has NO tools, NO outbound capability \u2014 it returns schema-validated JSON only (llm.py)",
+      "The egress allowlist is fixed in code (6 destinations); the model cannot add one",
+      "No runtime exfil detection exists \u2014 but the channel it would detect does not exist"
+    ],
+    "standing_control": {
+      "mechanism": "Structural (S13): the model has no egress capability; the exfil leg does not exist. The egress allowlist is fixed in code (6 destinations); the model cannot add one.",
+      "cadence": "every push",
+      "ratchet": "no code path may give model output an outbound channel",
+      "calibration": "the injection test + code review of the fixed egress set",
+      "blocks_on_breach": "merge",
+      "owning_role": "operator + CI",
+      "demonstrated": "The LLM returns text only (llm.py); no tool/function-calling path; trades go through _swap."
+    },
+    "note": "Strong architectural containment: the exfiltration leg is structurally absent (the model cannot act or egress). No runtime detector, and none is load-bearing here.  [Phase 6] Exfiltration is structurally absent, not merely undetected.",
+    "structural_fix": true,
+    "door": "agent-split",
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: a test asserting the model-output path cannot reach any network call (structural invariant); documented."
+  },
+  {
+    "id": "B-21",
+    "title": "The application survives a provider outage",
+    "priority": 6,
+    "band": "SHOULD-FIX",
+    "verdict": "PARTIAL",
+    "probe": "Made each provider fail (mentally + LLM fallback is unit-tested).",
+    "evidence": [
+      "LLM: anthropic->openai failover is real and tested; on total LLM failure the engine refuses to trade (fail-safe)",
+      "Exchange/TA: no alternate provider; failure => logged job error, no crash, no trade"
+    ],
+    "standing_control": null,
+    "note": "Survives provider outage by failing safe (LLM has true failover).",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: the fail-safe-on-provider-error test."
+  },
+  {
+    "id": "B-22",
+    "title": "Agents deployed with least privilege, enforced",
+    "priority": 9,
+    "band": "BLOCKER-1",
+    "verdict": "PARTIAL",
+    "probe": "Enumerated the process's privileges and whether they are least and enforced.",
+    "evidence": [
+      "Single process, single principal (operator's keys); no per-agent identities",
+      "README advises no-withdrawal + IP-pinned exchange keys; not enforceable in code (exchange-side scope)",
+      "Key scope is deny-by-default only if the operator sets it so at the exchange"
+    ],
+    "standing_control": null,
+    "note": "Re-scoped: there are no autonomous agents to privilege-separate. The meaningful least-privilege is the exchange key scope, which is documented but exchange-side.",
+    "structural_fix": true,
+    "door": "tool-gateway",
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: a startup check that warns if withdrawal-capable keys are detectable via test_connection permissions; document."
+  },
+  {
+    "id": "B-23",
+    "title": "Behavioural baselines for agents, with automatic containment",
+    "priority": 7,
+    "band": "MUST-FIX",
+    "verdict": "NOT-APPLICABLE",
+    "probe": "Looked for per-agent behavioural baselines + anomaly containment.",
+    "evidence": [
+      "No autonomous agents; one deterministic engine with fixed handlers"
+    ],
+    "standing_control": null,
+    "note": "",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "n/a",
+    "na_justification": "'Agent behavioural baseline' presumes autonomous tool-using agents whose action mix could drift. Here a deterministic engine runs fixed handlers on a schedule; there is no agent whose behaviour could deviate. The analogous protection (bounding money moved) is the A-34 trading cap, not behavioural anomaly detection."
+  },
+  {
+    "id": "B-24",
+    "title": "Quality drift detection",
+    "priority": 7,
+    "band": "MUST-FIX",
+    "verdict": "PARTIAL",
+    "probe": "Asked how a drop in LLM decision quality would be noticed.",
+    "evidence": [
+      "No online eval of LLM output; a provider-side model change would not be detected",
+      "Floating model aliases (B-13) make silent provider drift MORE likely"
+    ],
+    "standing_control": null,
+    "note": "Quality drift would surface only as bad trades. Pinning (B-13) + a golden eval (B-10) are the levers.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: model pinning removes silent-swap drift; golden eval fixture flags decision drift."
+  },
+  {
+    "id": "B-25",
+    "title": "Environment separation and parity",
+    "priority": 7,
+    "band": "MUST-FIX",
+    "verdict": "NOT-APPLICABLE",
+    "probe": "Compared connection strings/creds/flags across environments.",
+    "evidence": [
+      "One environment: the operator's own deployment. No staging/prod split, no separate data plane"
+    ],
+    "standing_control": null,
+    "note": "",
+    "structural_fix": true,
+    "door": "credential-broker",
+    "conditional_escalation": null,
+    "standing_control_plan": "n/a",
+    "na_justification": "Environment-separation and 'no production credential in non-production' presuppose multiple environments. This system has exactly one deployment with one set of the operator's own credentials; there is no non-production plane that could hold a production secret. The dry-run/live boundary (a runtime flag, not an environment) is handled by A-15/A-34."
+  },
+  {
+    "id": "B-26",
+    "title": "Feature flags and kill switches that fire themselves",
+    "priority": 6,
+    "band": "SHOULD-FIX",
+    "verdict": "PASS",
+    "probe": "Looked for per-feature kill switches that fire themselves.",
+    "evidence": [
+      "Manual kill switch = Stop (engine.stop, persisted); dry_run flag; no self-firing tripwire"
+    ],
+    "standing_control": {
+      "mechanism": "Auto-halt tripwire flips the engine off on a cap breach without human action; dry_run + Stop are additional switches.",
+      "cadence": "every push",
+      "ratchet": "AI features without a tested kill switch stay at zero",
+      "calibration": "test_daily_cap exercises the self-firing switch every run",
+      "blocks_on_breach": "merge + runtime",
+      "owning_role": "operator + CI",
+      "demonstrated": "test_daily_cap_refuses_and_halts_engine demonstrates the self-firing kill switch."
+    },
+    "note": "Manual kill present; no automatic trip.  [Phase 6] The kill switch fires itself and is tested.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: trading-cap tripwire auto-flips to halt (A-34)."
+  },
+  {
+    "id": "B-27",
+    "title": "Artifact integrity",
+    "priority": 7,
+    "band": "MUST-FIX",
+    "verdict": "PARTIAL",
+    "probe": "Tried to verify image signature; tried to deploy a modified image.",
+    "evidence": [
+      "No image signing/verification; build is reproducible-ish (pinned deps, pinned base tag)"
+    ],
+    "standing_control": null,
+    "note": "No artifact integrity verification.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: SBOM + pinned digests; signing disproportionate (residual)."
+  },
+  {
+    "id": "B-28",
+    "title": "Detection that triggers action, not just a notification",
+    "priority": 8,
+    "band": "BLOCKER-2",
+    "verdict": "PARTIAL",
+    "probe": "Checked whether detection triggers action or only notifies.",
+    "evidence": [
+      "SMS alerts on repay + rebalance failure (notification); the engine itself auto-responds by NOT trading on error (fail-safe)",
+      "No automated remediation beyond fail-safe + restart"
+    ],
+    "standing_control": null,
+    "note": "The consequential auto-response (don't trade on bad signal) exists structurally; alerts are notifications on top.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: the trading-cap tripwire (A-34) is the automated response that halts on anomaly."
+  },
+  {
+    "id": "B-29",
+    "title": "Reliability primitives, validated by breaking things",
+    "priority": 7,
+    "band": "MUST-FIX",
+    "verdict": "PARTIAL",
+    "probe": "Checked reliability primitives and whether failure was injected.",
+    "evidence": [
+      "Timeouts + LLM failover present; no chaos/failure-injection has been run",
+      "The fail-safe-on-error path is unit-testable"
+    ],
+    "standing_control": null,
+    "note": "Primitives present, not validated by breaking.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: a test injecting exchange failure asserting no-trade + safe state."
+  },
+  {
+    "id": "B-30",
+    "title": "Capacity, including inference capacity",
+    "priority": 6,
+    "band": "SHOULD-FIX",
+    "verdict": "NOT-APPLICABLE",
+    "probe": "Load-tested to the knee; inference capacity.",
+    "evidence": [
+      "Single user, background cadence (minutes); no concurrency, no scale requirement"
+    ],
+    "standing_control": null,
+    "note": "",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "n/a",
+    "na_justification": "Capacity/load-shedding/autoscaling govern multi-user throughput. This bot runs a handful of sequential API calls every several minutes for one user; there is no load to plan for and no autoscaler to bound."
+  },
+  {
+    "id": "B-31",
+    "title": "Backups you have actually restored",
+    "priority": 8,
+    "band": "BLOCKER-2",
+    "verdict": "PARTIAL",
+    "probe": "Identified durable state and whether a restore was ever performed.",
+    "evidence": [
+      "Only durable state is config/config.json (keys) + optional .env; EngineState is ephemeral by design",
+      "No backup/restore drill; config is re-enterable via the UI"
+    ],
+    "standing_control": null,
+    "note": "Minimal durable state; restore = re-enter keys or copy config.json. Low stakes, but no documented procedure.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: document config backup in AGENTS.md; no automated restore drill (proportionate residual)."
+  },
+  {
+    "id": "B-32",
+    "title": "Drift detection",
+    "priority": 5,
+    "band": "PLAN",
+    "verdict": "NOT-APPLICABLE",
+    "probe": "Changed running infra by hand to see if anything notices.",
+    "evidence": [
+      "Single container from a pinned image; no managed desired-state to reconcile"
+    ],
+    "standing_control": null,
+    "note": "",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "n/a",
+    "na_justification": "Drift detection reconciles a declared desired state against a managed fleet. Here the whole runtime is one container rebuilt from a pinned Dockerfile; there is no orchestrator holding desired state to diverge from. Rebuild-from-source is the reconciliation."
+  },
+  {
+    "id": "B-33",
+    "title": "Integrity of the retrieval corpus",
+    "priority": 7,
+    "band": "MUST-FIX",
+    "verdict": "NOT-APPLICABLE",
+    "probe": "Looked for a retrieval corpus and its integrity controls.",
+    "evidence": [
+      "No vector store / retrieval corpus exists"
+    ],
+    "standing_control": null,
+    "note": "",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "n/a",
+    "na_justification": "There is no persistent retrieval corpus or embedding index to poison or stale. The only cache is short-TTL TA/LLM JSON in dry-run, keyed by symbol, never cross-user, and reproducible on expiry."
+  },
+  {
+    "id": "B-34",
+    "title": "Latency budgets for inference",
+    "priority": 5,
+    "band": "PLAN",
+    "verdict": "NOT-APPLICABLE",
+    "probe": "Measured inference latency percentiles vs an interactive budget.",
+    "evidence": [
+      "Inference is background (a rebalance cycle every several minutes), not interactive"
+    ],
+    "standing_control": null,
+    "note": "",
+    "structural_fix": true,
+    "door": "model-gateway",
+    "conditional_escalation": null,
+    "standing_control_plan": "n/a",
+    "na_justification": "Latency budgets (TTFT, p95 end-to-end) matter for interactive, user-facing inference. This LLM call runs inside a background scheduler with minute-scale cadence and no user waiting; a few seconds of model latency is immaterial to correctness or UX."
+  },
+  {
+    "id": "B-35",
+    "title": "Release governance: segregate the gate from the gated",
+    "priority": 6,
+    "band": "SHOULD-FIX",
+    "verdict": "PARTIAL",
+    "probe": "Asked whether the code-writer can also write the gate that judges it.",
+    "evidence": [
+      "No policy bundle exists yet; once CI is added it lives in the SAME repo the operator can push to",
+      "A solo GitHub repo has one identity \u2014 the operator holds both code-write and workflow-write"
+    ],
+    "standing_control": null,
+    "note": "Segregation of gate-from-gated is structurally UNACHIEVABLE for a single-principal repo without a second identity/org. Recorded honestly, not faked.  [Phase 6] gate/gated separation unachievable on a solo repo (one identity) -- residual R-1; compensating: protected branch + CODEOWNERS on .github/ + governance/. Handled by Article XV Incubating scope, not faked.",
+    "structural_fix": true,
+    "door": "policy-bundle-separation",
+    "conditional_escalation": "STOP-SHIP if any code-writing agent can write to the policy bundle that gates it",
+    "standing_control_plan": "Phase 5: compensating controls \u2014 protected branch + required status checks + CODEOWNERS on .github/ and governance/, so bypass is at least visible/logged; residual with tripwire (06-residual-risk-register)."
+  },
+  {
+    "id": "B-36",
+    "title": "Model deprecation is a plan, not an outage",
+    "priority": 6,
+    "band": "SHOULD-FIX",
+    "verdict": "PARTIAL",
+    "probe": "Listed model versions + deprecation exposure.",
+    "evidence": [
+      "Floating aliases (B-13); no deprecation watch; fallback chain gives partial resilience"
+    ],
+    "standing_control": null,
+    "note": "Deprecation would surface as failures + fallback.",
+    "structural_fix": true,
+    "door": "model-gateway",
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 5: pin snapshots (B-13) + a note to watch provider EOL."
+  },
+  {
+    "id": "B-37",
+    "title": "Retirement of AI artifacts and the right to erasure",
+    "priority": 5,
+    "band": "PLAN",
+    "verdict": "NOT-APPLICABLE",
+    "probe": "Deleted a user end-to-end across every derived store.",
+    "evidence": [
+      "No third-party personal data; the only personal data is the operator's own keys + SMS number, in config.json"
+    ],
+    "standing_control": null,
+    "note": "",
+    "structural_fix": true,
+    "door": "derived-store-registry",
+    "conditional_escalation": null,
+    "standing_control_plan": "n/a",
+    "na_justification": "Right-to-erasure/derived-store retirement governs third-party personal data spread across stores. Here there are no third-party data subjects: the sole data subject is the operator, who erases their own data by deleting config/config.json (and .env). There is no vector store, training set, or trace store holding anyone else's data."
+  },
+  {
+    "id": "B-38",
+    "title": "Inference economics",
+    "priority": 4,
+    "band": "ASSESS",
+    "verdict": "NOT-APPLICABLE",
+    "probe": "Measured cache hit rate + cost split.",
+    "evidence": [
+      "Immaterial spend (cents/day); prompt caching would optimise an already-trivial bill"
+    ],
+    "standing_control": null,
+    "note": "",
+    "structural_fix": true,
+    "door": "model-gateway",
+    "conditional_escalation": null,
+    "standing_control_plan": "n/a",
+    "na_justification": "Inference economics (prompt-cache hit rate, cost-based routing) optimise a material inference bill. This bot's LLM spend is a few calls per cycle for one user \u2014 immaterial \u2014 so cache-hit engineering would be optimisation with no measurable return. Re-band if usage ever scales."
+  },
+  {
+    "id": "B-39",
+    "title": "Design against a named reference framework",
+    "priority": 5,
+    "band": "PLAN",
+    "verdict": "PARTIAL",
+    "probe": "Asked which reference framework the design targets.",
+    "evidence": [
+      "None named"
+    ],
+    "standing_control": null,
+    "note": "Design is sound but not mapped to a framework.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control_plan": "Phase 4: governance/ names the (right-sized) reference posture."
+  },
+  {
+    "id": "C-01",
+    "title": "Core application security",
+    "priority": 10,
+    "band": "STOP-SHIP",
+    "verdict": "PASS",
+    "probe": "Attacked the API: IDOR (single-user, no per-user objects -> N/A); tested authn on state-changing routes and the bind exposure.",
+    "evidence": [
+      "BASELINE FAIL: PUT /api/config, engine start/stop, run/{job}, test-connection were unauthenticated; any local process could flip dry_run or place trades (mitigated only by loopback bind).",
+      "FIX: assert_safe_binding refuses non-loopback bind without a token (src/main.py); require_auth guards all state-changing routes when web.auth_token is set (src/web/app.py).",
+      "IDOR/cross-tenant dimension is N/A: one principal, no per-user resources."
+    ],
+    "note": "The one genuine STOP-SHIP that applies; fixed. Exposure beyond loopback without auth is now unrepresentable.",
+    "structural_fix": true,
+    "door": "tenancy-in-dal",
+    "conditional_escalation": null,
+    "standing_control": {
+      "mechanism": "Bind-guard + bearer-token auth on every state-changing route; secret-scan + no-secrets-in-prompts in the gate.",
+      "cadence": "every push",
+      "ratchet": "may not regress",
+      "calibration": "seeded in gate_selftest/mutation where applicable",
+      "blocks_on_breach": "merge + deploy",
+      "owning_role": "operator + CI",
+      "demonstrated": "6 tests in test_web_auth.py: 401 without token, 200 with; bind-guard raises on 0.0.0.0 without token; reads/health stay open. Full suite 53 green."
+    },
+    "standing_control_plan": null
+  },
+  {
+    "id": "C-04",
+    "title": "Privacy and data governance",
+    "priority": 10,
+    "band": "STOP-SHIP",
+    "verdict": "NOT-APPLICABLE",
+    "probe": "Followed the personal data: where it enters, is stored/copied, retained, and on what basis; tested erasure.",
+    "evidence": [
+      "The only personal data is the OPERATOR'S OWN: their exchange/LLM API keys + their own SMS recipient number, in gitignored config.json.",
+      "No third-party data subjects; no customer data; no analytics; the LLM prompts carry market data + the operator's own portfolio values only.",
+      "Erasure = delete config/config.json (+ .env). No derived PII stores (no DB, no vector store, no trace store)."
+    ],
+    "note": "",
+    "structural_fix": true,
+    "door": "derived-store-registry",
+    "conditional_escalation": "STOP-SHIP where EU personal data is processed; else re-band against the law that applies",
+    "standing_control": null,
+    "standing_control_plan": null,
+    "na_justification": "C-04's STOP-SHIP form governs processing of THIRD-PARTY personal data under GDPR's controller/processor/data-subject triangle. Here the operator is simultaneously the sole controller, processor and data subject, processing only their own data on their own self-hosted instance for their own purposes. No lawful-basis/DPIA/subject-access obligation to third parties arises. Re-banded off STOP-SHIP per the check's own 'otherwise re-band against the law that applies' clause. The only residual (operator's keys at rest) is tracked under B-06."
+  },
+  {
+    "id": "C-02",
+    "title": "Threat model",
+    "priority": 8,
+    "band": "BLOCKER-2",
+    "verdict": "PARTIAL",
+    "probe": "Asked for the threat model; built it from the system as it stands (DFD + trust boundaries + STRIDE per boundary); asked what keeps it current.",
+    "evidence": [
+      "governance/security-notes.md: data-flow + trust boundaries (operator/UI, engine/exchange, engine/LLM, engine/TA/SMS) with a STRIDE enumeration mapped to controls.",
+      "Every threat maps to a control or a documented acceptance; the fixed 6-destination egress allowlist is in code (a new one is a visible diff).",
+      "No automated new-trust-boundary CI detector (proportionate); the standing-regime re-run triggers cover new integrations."
+    ],
+    "note": "Threat model built and version-controlled; the automated staleness detector is a residual, mitigated by the fixed in-code egress set + re-run triggers.",
+    "structural_fix": true,
+    "door": "generate-inventory",
+    "conditional_escalation": null,
+    "standing_control": null,
+    "standing_control_plan": null
+  },
+  {
+    "id": "C-03",
+    "title": "Supply-chain security and hallucinated packages",
+    "priority": 9,
+    "band": "BLOCKER-1",
+    "verdict": "PASS",
+    "probe": "Enumerated deps; resolved each on PyPI; checked pinning + registration age; seeded a slopsquat (D3).",
+    "evidence": [
+      "All 9 runtime deps pinned and resolve on PyPI; all long-established (years old) -> no newly-registered/slopsquat risk.",
+      "check_deps.py + pip-audit block on every push; D3 (fake package) caught (02-calibration.md).",
+      "Poisoned-dependency playbook: governance/security-notes.md."
+    ],
+    "note": "",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control": {
+      "mechanism": "check_deps.py (existence+pin) + pip-audit (known-vuln) in the gate; playbook documented.",
+      "cadence": "every push",
+      "ratchet": "may not regress",
+      "calibration": "seeded in gate_selftest/mutation where applicable",
+      "blocks_on_breach": "merge",
+      "owning_role": "operator + CI",
+      "demonstrated": "gate_selftest D3 caught; pip-audit 'No known vulnerabilities'."
+    },
+    "standing_control_plan": null
+  },
+  {
+    "id": "C-05",
+    "title": "The LLM application risk taxonomy, mapped and tested",
+    "priority": 9,
+    "band": "BLOCKER-1",
+    "verdict": "PASS",
+    "probe": "Built the 10-category LLM-risk coverage matrix, mapping each to a control AND a test.",
+    "evidence": [
+      "governance/llm-risk-matrix.md: every category mapped to a control + an executable test; empty/test-less cells = none.",
+      "Injection, output-handling, excessive-agency, consumption all carry tests in the gate."
+    ],
+    "note": "",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control": {
+      "mechanism": "Coverage matrix with a test per cell; CI runs the mapped tests.",
+      "cadence": "every push",
+      "ratchet": "may not regress",
+      "calibration": "seeded in gate_selftest/mutation where applicable",
+      "blocks_on_breach": "merge",
+      "owning_role": "operator + CI",
+      "demonstrated": "llm-risk-matrix.md complete; the mapped tests (injection, cap, masking, schema) pass in the 53-test suite."
+    },
+    "standing_control_plan": null
+  },
+  {
+    "id": "C-06",
+    "title": "The agentic risk taxonomy",
+    "priority": 8,
+    "band": "BLOCKER-2",
+    "verdict": "PASS",
+    "probe": "Walked all 10 agentic-risk categories against the architecture; checked whether any model can call a writing/spending tool.",
+    "evidence": [
+      "The LLM has NO tools (governance/capability-labels.json): it returns text; the deterministic engine acts. C-06 does NOT escalate to STOP-SHIP.",
+      "Irreversible action (trade) is wrapped with a validator + blast-radius cap + auto-halt (A-34); not a bare irreversible capability.",
+      "Categories tool-misuse/code-exec/inter-agent/memory-poisoning/rogue-agents are N/A (argued in llm-risk-matrix.md)."
+    ],
+    "note": "",
+    "structural_fix": true,
+    "door": "tool-gateway",
+    "conditional_escalation": "priority 10 / STOP-SHIP if any model can call a tool that writes/sends/spends/deletes/executes",
+    "standing_control": {
+      "mechanism": "Capability inventory (capability-labels.json) + trifecta test + the trading cap.",
+      "cadence": "every push",
+      "ratchet": "may not regress",
+      "calibration": "seeded in gate_selftest/mutation where applicable",
+      "blocks_on_breach": "merge",
+      "owning_role": "operator + CI",
+      "demonstrated": "test_no_session_holds_the_lethal_trifecta + test_llm_advisor_has_no_egress_or_tools pass; cap tests pass."
+    },
+    "standing_control_plan": null
+  },
+  {
+    "id": "C-07",
+    "title": "Prompt injection",
+    "priority": 9,
+    "band": "BLOCKER-1",
+    "verdict": "PARTIAL",
+    "probe": "Attempted direct + indirect injection; assessed whether a successful injection can be consequential.",
+    "evidence": [
+      "Containment is ARCHITECTURAL: model has no tools/egress; output is schema-validated to {sell_buy,buy,sell,hold} on configured assets; the trading cap bounds consequence.",
+      "test_injection_cannot_produce_out_of_schema_action pins it.",
+      "Residual (a valid-but-wrong action) accepted in writing (security-notes.md) with the cap + dry-run + auto-halt as compensating control and tripwire."
+    ],
+    "note": "UNSETTLED DOCTRINE: no general injection defence exists; the durable mitigation here is architectural, and it holds because the model is an advisor, not an agent.",
+    "structural_fix": true,
+    "door": "agent-split",
+    "conditional_escalation": null,
+    "standing_control": {
+      "mechanism": "Injection test + structural no-tools/no-egress + the cap tripwire; residual re-accepted on cadence.",
+      "cadence": "every push",
+      "ratchet": "may not regress",
+      "calibration": "seeded in gate_selftest/mutation where applicable",
+      "blocks_on_breach": "merge",
+      "owning_role": "operator + CI",
+      "demonstrated": "test_injection... passes; the cap tests fire the tripwire."
+    },
+    "standing_control_plan": null
+  },
+  {
+    "id": "C-08",
+    "title": "The dangerous three: never combine all of them",
+    "priority": 8,
+    "band": "BLOCKER-2",
+    "verdict": "PASS",
+    "probe": "Labelled every session's legs {untrusted-input, private-data, external-communication}; searched for any holding all three.",
+    "evidence": [
+      "capability-labels.json: llm-advisor holds [untrusted-input] only (no egress); trade-engine holds [private-data, external-communication] but NOT untrusted-input (it acts on schema-validated output only).",
+      "No session holds all three -> the trifecta cannot assemble."
+    ],
+    "note": "",
+    "structural_fix": true,
+    "door": "tool-gateway",
+    "conditional_escalation": null,
+    "standing_control": {
+      "mechanism": "The two-of-three rule asserted mechanically on every push; a capability completing the triangle fails the build.",
+      "cadence": "every push",
+      "ratchet": "may not regress",
+      "calibration": "seeded in gate_selftest/mutation where applicable",
+      "blocks_on_breach": "merge",
+      "owning_role": "operator + CI",
+      "demonstrated": "test_no_session_holds_the_lethal_trifecta passes; adding a third leg to any session fails it."
+    },
+    "standing_control_plan": null
+  },
+  {
+    "id": "C-09",
+    "title": "EU AI Act",
+    "priority": 9,
+    "band": "BLOCKER-1",
+    "verdict": "PARTIAL",
+    "probe": "Inventoried the AI system(s) and classified the risk tier against the EU AI Act.",
+    "evidence": [
+      "One AI system: an LLM used as an internal decision advisor for the operator's own portfolio (security-notes.md).",
+      "Classified NOT high-risk: not a listed high-risk use, personal/non-professional self-hosted use, no user-facing generative content -> Article 50 transparency does not bind. Does NOT hard-gate at 10."
+    ],
+    "note": "Inventory auto-generation is disproportionate for one system; classification is the deliverable.",
+    "structural_fix": true,
+    "door": "generate-inventory",
+    "conditional_escalation": "hard gate at 10 if anything is high-risk on the EU market",
+    "standing_control": {
+      "mechanism": "Classification documented; re-run trigger fires on any move toward multi-user/market placement.",
+      "cadence": "every push",
+      "ratchet": "may not regress",
+      "calibration": "seeded in gate_selftest/mutation where applicable",
+      "blocks_on_breach": "merge",
+      "owning_role": "operator + CI",
+      "demonstrated": "security-notes.md classification; the standing-regime re-run trigger for multi-user is wired."
+    },
+    "standing_control_plan": null
+  },
+  {
+    "id": "C-10",
+    "title": "Evaluation methodology",
+    "priority": 8,
+    "band": "BLOCKER-2",
+    "verdict": "PARTIAL",
+    "probe": "Asked what 'correct' means for the model path and whether an eval set gates changes.",
+    "evidence": [
+      "Deterministic decision surface (scoring/schema) is regression-tested + mutation-pinned.",
+      "No golden eval set for the model's live judgment -> same residual as B-10 (disproportionate for an advisory, schema-bounded LLM)."
+    ],
+    "note": "Residual carried from B-10 (06-residual-risk-register).",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control": null,
+    "standing_control_plan": null
+  },
+  {
+    "id": "C-11",
+    "title": "A running AI risk-management programme",
+    "priority": 7,
+    "band": "MUST-FIX",
+    "verdict": "PARTIAL",
+    "probe": "Looked for a live risk-management programme emitting durable artifacts.",
+    "evidence": [
+      "The audit/ + governance/ trees ARE the durable artifacts, emitted/updated through the pipeline (not a one-off PDF).",
+      "No formal governance charter (proportionate for solo); owning role = operator."
+    ],
+    "note": "Proportionate; artifacts are pipeline-emitted.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control": null,
+    "standing_control_plan": null
+  },
+  {
+    "id": "C-12",
+    "title": "Excessive agency and the autonomy policy",
+    "priority": 7,
+    "band": "MUST-FIX",
+    "verdict": "PASS",
+    "probe": "Split agency three ways (functionality/permissions/autonomy); checked the kill switch fires itself.",
+    "evidence": [
+      "Excessive functionality: model has no tools. Excessive permissions: single principal, keys operator-scoped (withdrawal-off advised). Excessive autonomy: bounded by the cap + auto-halt.",
+      "Kill switch tested (test_daily_cap auto-halt)."
+    ],
+    "note": "",
+    "structural_fix": true,
+    "door": "tool-gateway",
+    "conditional_escalation": null,
+    "standing_control": {
+      "mechanism": "The trading cap + auto-halt + capability inventory; model has no tools.",
+      "cadence": "every push",
+      "ratchet": "may not regress",
+      "calibration": "seeded in gate_selftest/mutation where applicable",
+      "blocks_on_breach": "merge",
+      "owning_role": "operator + CI",
+      "demonstrated": "test_daily_cap_refuses_and_halts_engine; capability-labels.json."
+    },
+    "standing_control_plan": null
+  },
+  {
+    "id": "C-13",
+    "title": "AI management system",
+    "priority": 6,
+    "band": "SHOULD-FIX",
+    "verdict": "NOT-APPLICABLE",
+    "probe": "Checked whether an AI management system is claimed.",
+    "evidence": [
+      "No AMS (ISO/IEC 42001-style) is claimed anywhere."
+    ],
+    "note": "",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control": null,
+    "standing_control_plan": null,
+    "na_justification": "The mandate: absence of an AMS is rarely fatal; an unsubstantiated claim is worse than none. No AMS is claimed, so there is nothing to substantiate. Dropped rather than asserted."
+  },
+  {
+    "id": "C-14",
+    "title": "Validating the judge",
+    "priority": 6,
+    "band": "SHOULD-FIX",
+    "verdict": "NOT-APPLICABLE",
+    "probe": "Looked for a place a model grades another model's output and gates on it.",
+    "evidence": [
+      "No model-judges-model gate exists. The LLM is the decision-maker; its output is validated DETERMINISTICALLY (schema), not judged by another model."
+    ],
+    "note": "",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control": null,
+    "standing_control_plan": null,
+    "na_justification": "A judge is a model that scores another model's output to gate a decision. This system has no such judge -- the deterministic schema validation replaces judgement entirely (the mandate's preferred 'need the judge less'). Nothing to validate."
+  },
+  {
+    "id": "C-15",
+    "title": "Guardrails have their own tests, and their own adversary",
+    "priority": 7,
+    "band": "MUST-FIX",
+    "verdict": "PARTIAL",
+    "probe": "Treated the schema-validation guardrail as an artifact needing its own adversarial tests.",
+    "evidence": [
+      "The guardrail (LLM-output schema validation) has tests incl. the adversarial injection test; it fails closed.",
+      "No continuous automated red-team campaign (proportionate for a non-chat, schema-bounded surface)."
+    ],
+    "note": "Tested guardrail; continuous red-team disproportionate (residual).",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control": null,
+    "standing_control_plan": null
+  },
+  {
+    "id": "C-16",
+    "title": "Machine identity and agent-to-agent trust",
+    "priority": 7,
+    "band": "MUST-FIX",
+    "verdict": "NOT-APPLICABLE",
+    "probe": "Inventoried non-human identities; checked for borrowed sessions.",
+    "evidence": [
+      "One principal (the operator). No per-agent identities, no service accounts, no agent-to-agent calls."
+    ],
+    "note": "",
+    "structural_fix": true,
+    "door": "credential-broker",
+    "conditional_escalation": null,
+    "standing_control": null,
+    "standing_control_plan": null,
+    "na_justification": "Machine-identity governance presupposes multiple non-human identities that could be over-scoped or borrow a human session. Here one process runs under the operator's own credentials; there is no agent identity plane to inventory or a human session to borrow."
+  },
+  {
+    "id": "C-17",
+    "title": "Tool poisoning",
+    "priority": 7,
+    "band": "MUST-FIX",
+    "verdict": "NOT-APPLICABLE",
+    "probe": "Looked for tool definitions/descriptions the model is given.",
+    "evidence": [
+      "The model is given no tools and no tool descriptions; it receives a fixed prompt and returns text."
+    ],
+    "note": "",
+    "structural_fix": true,
+    "door": "tool-gateway",
+    "conditional_escalation": null,
+    "standing_control": null,
+    "standing_control_plan": null,
+    "na_justification": "Tool poisoning requires tool definitions/descriptions read by the model. This model has none -- no function-calling, no MCP, no connectors. There is no tool description to poison."
+  },
+  {
+    "id": "C-18",
+    "title": "Connector and tool-server security",
+    "priority": 7,
+    "band": "MUST-FIX",
+    "verdict": "NOT-APPLICABLE",
+    "probe": "Looked for external tool servers/connectors.",
+    "evidence": [
+      "No MCP servers, no connectors, no external tool servers. The only external calls are fixed REST endpoints in code."
+    ],
+    "note": "",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control": null,
+    "standing_control_plan": null,
+    "na_justification": "Connector/tool-server security governs authenticated connections to external tool servers. There are none; the egress is a fixed 6-destination allowlist in code, not a pluggable tool-server surface."
+  },
+  {
+    "id": "C-19",
+    "title": "Memory and context poisoning",
+    "priority": 6,
+    "band": "SHOULD-FIX",
+    "verdict": "NOT-APPLICABLE",
+    "probe": "Checked what can write to persistent agent memory / retrieved context.",
+    "evidence": [
+      "No persistent agent memory. The only cache is short-TTL TA/LLM JSON keyed by symbol, dry-run only, reproducible on expiry; it is never cross-session instruction state."
+    ],
+    "note": "",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control": null,
+    "standing_control_plan": null,
+    "na_justification": "Memory/context poisoning requires persistent memory a later session reads as instruction. This system builds a fresh, bounded prompt each cycle and retains no cross-session memory. The cache holds market data, not instructions, and is per-symbol and short-lived."
+  },
+  {
+    "id": "C-20",
+    "title": "Responsible-AI dimensions with owners and numbers",
+    "priority": 6,
+    "band": "SHOULD-FIX",
+    "verdict": "PARTIAL",
+    "probe": "For each responsible-AI dimension, sought an owner, a measure, and a cadence.",
+    "evidence": [
+      "Most dimensions (fairness/bias) are N/A -- no decisions about people. Controllability: Stop + cap + dry-run. Robustness: cap + mutation + injection tests.",
+      "Contestability: the operator controls every decision and can halt/override."
+    ],
+    "note": "Fairness/bias dimensions N/A (no human-affecting decisions); controllability/robustness covered by the cap + gate.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control": null,
+    "standing_control_plan": null
+  },
+  {
+    "id": "C-21",
+    "title": "Training and fine-tuning data governance",
+    "priority": 7,
+    "band": "MUST-FIX",
+    "verdict": "NOT-APPLICABLE",
+    "probe": "Looked for training/fine-tuning datasets.",
+    "evidence": [
+      "No custom or fine-tuned model; inference is against hosted APIs only."
+    ],
+    "note": "",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control": null,
+    "standing_control_plan": null,
+    "na_justification": "Training/tuning-data governance applies only where a custom or fine-tuned model exists. All inference here is against hosted Anthropic/OpenAI models; no dataset is used to train or tune anything."
+  },
+  {
+    "id": "C-22",
+    "title": "Retrieval evaluated separately from generation",
+    "priority": 7,
+    "band": "MUST-FIX",
+    "verdict": "NOT-APPLICABLE",
+    "probe": "Tried to decompose wrong answers into retriever vs generator failure.",
+    "evidence": [
+      "No retriever/RAG exists; the prompt is built directly from TradingView indicators."
+    ],
+    "note": "",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control": null,
+    "standing_control_plan": null,
+    "na_justification": "Retriever-vs-generator decomposition presupposes a retrieval step. There is none -- the model receives structured indicators built in code, not retrieved documents."
+  },
+  {
+    "id": "C-23",
+    "title": "Personal data in prompts, logs and traces",
+    "priority": 8,
+    "band": "BLOCKER-2",
+    "verdict": "PARTIAL",
+    "probe": "Grepped the log/event surface for email/phone/national-id/card patterns.",
+    "evidence": [
+      "Logs + the in-memory event log carry the operator's own portfolio values, asset names, and job status -- no third-party PII, no card/SSN patterns.",
+      "The SMS recipient (operator's own number) lives in config (masked in API responses), not in logs.",
+      "secret_scan covers secrets in source; no separate runtime log-PII scanner (proportionate -- only operator's own data)."
+    ],
+    "note": "No third-party PII in logs; the only personal data is the operator's own.",
+    "structural_fix": true,
+    "door": "telemetry-emitter",
+    "conditional_escalation": null,
+    "standing_control": null,
+    "standing_control_plan": null
+  },
+  {
+    "id": "C-24",
+    "title": "Disclosure through memorisation and system-prompt leakage",
+    "priority": 7,
+    "band": "MUST-FIX",
+    "verdict": "PASS",
+    "probe": "Read the system prompt + templates; scanned for secrets/PII; checked whether any security rule lives in the prompt.",
+    "evidence": [
+      "SYSTEM_PROMPT = 'You are a crypto finance expert responding in JSON.' -- no secrets, no PII, no load-bearing security rule.",
+      "All security controls are enforced in code (schema validation, cap, auth), not asked of the model."
+    ],
+    "note": "",
+    "structural_fix": true,
+    "door": "telemetry-emitter",
+    "conditional_escalation": null,
+    "standing_control": {
+      "mechanism": "test_no_secrets_or_pii_in_prompts + secret_scan cover the prompts on every push.",
+      "cadence": "every push",
+      "ratchet": "may not regress",
+      "calibration": "seeded in gate_selftest/mutation where applicable",
+      "blocks_on_breach": "merge",
+      "owning_role": "operator + CI",
+      "demonstrated": "test_no_secrets_or_pii_in_prompts passes; secret_scan scans src/prompts.py + src/llm.py."
+    },
+    "standing_control_plan": null
+  },
+  {
+    "id": "C-25",
+    "title": "Copyright and licensing of generated code",
+    "priority": 6,
+    "band": "SHOULD-FIX",
+    "verdict": "PARTIAL",
+    "probe": "Scanned deps + generated code for copyleft/reproduced snippets; sought an IP position.",
+    "evidence": [
+      "Deps are permissive; no copyleft conflict; no license-scan gate; no written IP position (residual, same as A-38)."
+    ],
+    "note": "Residual carried from A-38.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control": null,
+    "standing_control_plan": null
+  },
+  {
+    "id": "C-26",
+    "title": "SBOM, AI-BOM, provenance and cyber-resilience obligations",
+    "priority": 8,
+    "band": "BLOCKER-2",
+    "verdict": "PARTIAL",
+    "probe": "Looked for an SBOM/AI-BOM and deploy-time provenance verification.",
+    "evidence": [
+      "No SBOM yet; pip-audit + check_deps cover the dependency risk; container unsigned (residual, same as B-09)."
+    ],
+    "note": "Residual carried from B-09/B-27.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control": null,
+    "standing_control_plan": null
+  },
+  {
+    "id": "C-27",
+    "title": "Sector compliance baseline",
+    "priority": 9,
+    "band": "BLOCKER-1",
+    "verdict": "NOT-APPLICABLE",
+    "probe": "Determined which compliance frameworks bind this product.",
+    "evidence": [
+      "No SOC2/ISO 27001 claimed; NO payment/card data handled (the exchange handles PCI, not this app); no health data."
+    ],
+    "note": "",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control": null,
+    "standing_control_plan": null,
+    "na_justification": "C-27 audits only frameworks that genuinely bind. A personal self-hosted trading bot is subject to none: it makes no compliance claim, handles no cardholder data (orders go to the exchange's own PCI-scoped systems), and processes no health data. Nothing to evidence."
+  },
+  {
+    "id": "C-28",
+    "title": "Residency and regulatory scope decided at design time",
+    "priority": 7,
+    "band": "MUST-FIX",
+    "verdict": "NOT-APPLICABLE",
+    "probe": "Traced where data physically lives incl. caches/logs/backups/inference region.",
+    "evidence": [
+      "Single self-hosted instance; the operator chooses the host. No multi-region stores, no vector store, no managed data plane."
+    ],
+    "note": "",
+    "structural_fix": true,
+    "door": "derived-store-registry",
+    "conditional_escalation": null,
+    "standing_control": null,
+    "standing_control_plan": null,
+    "na_justification": "Residency/regulatory-scope-by-design governs multi-region data placement. This is one container on hardware the operator picks; there is no store whose region could drift. The model provider's inference region is the operator's provider-account choice, documented as their decision."
+  },
+  {
+    "id": "C-29",
+    "title": "Content safety and misuse prevention",
+    "priority": 6,
+    "band": "SHOULD-FIX",
+    "verdict": "NOT-APPLICABLE",
+    "probe": "Looked for a content-safety policy/taxonomy and generative-content surface.",
+    "evidence": [
+      "No user-generated content, no generative output distributed to third parties, no image/text generation surface."
+    ],
+    "note": "",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control": null,
+    "standing_control_plan": null,
+    "na_justification": "Content-safety/misuse-prevention governs generative features exposed to users who could elicit harmful content. This system has no such surface -- the model produces internal JSON trade signals consumed only by the deterministic engine, never shown to or elicited by third parties."
+  },
+  {
+    "id": "C-30",
+    "title": "Jailbreak resistance",
+    "priority": 6,
+    "band": "SHOULD-FIX",
+    "verdict": "PARTIAL",
+    "probe": "Considered jailbreak-to-consequence given no end-user prompt reaches the model.",
+    "evidence": [
+      "Not a chat surface: the model is called with fixed internal prompts; no end-user text reaches it.",
+      "Jailbreak-to-consequence is bounded by the same architectural containment as injection (no tools, schema-bounded, capped). Residual accepted in security-notes.md with the cap as tripwire."
+    ],
+    "note": "UNSETTLED; bounded by architecture, not a chat surface.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control": null,
+    "standing_control_plan": null
+  },
+  {
+    "id": "C-31",
+    "title": "Adversarial technique taxonomy and agentic threat layers",
+    "priority": 5,
+    "band": "PLAN",
+    "verdict": "PARTIAL",
+    "probe": "Mapped the threat model to named adversarial techniques/layers.",
+    "evidence": [
+      "security-notes.md maps boundaries to STRIDE + the injection/exfiltration/excessive-agency classes.",
+      "No automated taxonomy-refresh (proportionate; PLAN band)."
+    ],
+    "note": "Coverage/vocabulary check; proportionate.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control": null,
+    "standing_control_plan": null
+  },
+  {
+    "id": "C-32",
+    "title": "Vector and embedding weaknesses",
+    "priority": 6,
+    "band": "SHOULD-FIX",
+    "verdict": "NOT-APPLICABLE",
+    "probe": "Checked vector-store access control / inversion / poisoning.",
+    "evidence": [
+      "No vector store, no embeddings anywhere in the system."
+    ],
+    "note": "",
+    "structural_fix": true,
+    "door": "derived-store-registry",
+    "conditional_escalation": null,
+    "standing_control": null,
+    "standing_control_plan": null,
+    "na_justification": "Vector/embedding weaknesses require an embedding store. There is none -- no RAG, no semantic search, no embeddings are computed or stored."
+  },
+  {
+    "id": "C-33",
+    "title": "An AI usage policy that is enforced, not merely published",
+    "priority": 6,
+    "band": "SHOULD-FIX",
+    "verdict": "PARTIAL",
+    "probe": "Looked for an AI usage policy and whether it is enforced, not just published.",
+    "evidence": [
+      "governance/constitution.md + AGENTS.md are the policy; the machine-relevant clauses (permitted change classes, model pins, tool allowlist=none) are compiled into the CI gate.",
+      "Cross-functional ownership N/A for a solo project."
+    ],
+    "note": "Policy exists and its machine-relevant clauses are gate-enforced; solo ownership.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control": null,
+    "standing_control_plan": null
+  },
+  {
+    "id": "C-34",
+    "title": "Provider training on your data -- check the contract and the switch",
+    "priority": 7,
+    "band": "MUST-FIX",
+    "verdict": "PARTIAL",
+    "probe": "Checked provider training-on-data: contract AND configured state.",
+    "evidence": [
+      "Anthropic + OpenAI API terms do not train on API traffic by default; not asserted programmatically here.",
+      "Residual: the operator should confirm the opt-out state in their provider accounts (documented in security-notes/residual)."
+    ],
+    "note": "Provider-default no-train; programmatic assertion is a residual (operator-in-command account setting).",
+    "structural_fix": true,
+    "door": "model-gateway",
+    "conditional_escalation": null,
+    "standing_control": null,
+    "standing_control_plan": null
+  },
+  {
+    "id": "C-35",
+    "title": "Benchmark contamination and who evaluates the evaluator",
+    "priority": 4,
+    "band": "ASSESS",
+    "verdict": "NOT-APPLICABLE",
+    "probe": "Checked for eval-set contamination / benchmark claims sent to a provider.",
+    "evidence": [
+      "No benchmark numbers are quoted anywhere; no held-out eval set exists to leak; no marketing/data-room claims."
+    ],
+    "note": "",
+    "structural_fix": true,
+    "door": "heldout-eval-store",
+    "conditional_escalation": null,
+    "standing_control": null,
+    "standing_control_plan": null,
+    "na_justification": "Benchmark-contamination governs evaluation numbers used in claims. This system makes no benchmark claim and holds no eval set that could be contaminated or exfiltrated. 'Who evaluates the evaluator' is answered structurally: there is no model-judge (C-14 N/A) -- the deterministic gate does."
+  },
+  {
+    "id": "C-36",
+    "title": "Transparency and marking of generated output",
+    "priority": 6,
+    "band": "SHOULD-FIX",
+    "verdict": "PARTIAL",
+    "probe": "Checked disclosure of machine-generated content + marking claims.",
+    "evidence": [
+      "The dashboard labels LLM-derived sentiment/recommendations as model output; no content is distributed to third parties, so machine-readable marking does not bind.",
+      "security-notes.md states marking's limits (not overclaimed)."
+    ],
+    "note": "Internal-only output; disclosure present, marking N/A, limits documented.",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control": null,
+    "standing_control_plan": null
+  },
+  {
+    "id": "C-37",
+    "title": "Accountability without a signature",
+    "priority": 5,
+    "band": "PLAN",
+    "verdict": "PARTIAL",
+    "probe": "Asked whether any production line is reconstructible (model/prompt/spec/gate/tests/owner).",
+    "evidence": [
+      "Git history + commit provenance + the audit/ evidence tree form a reconstructible chain per commit; owning role = operator.",
+      "No cryptographic signed-attestation chain (residual). Does NOT escalate to BLOCKER-1: git history provides the reconstructible chain the check requires."
+    ],
+    "note": "Git provenance is the chain; signing is a residual (shared with B-09).",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": "BLOCKER-1 if any production component has no attested provenance chain",
+    "standing_control": null,
+    "standing_control_plan": null
+  },
+  {
+    "id": "C-38",
+    "title": "Fabrication and the downstream reliance on it",
+    "priority": 6,
+    "band": "SHOULD-FIX",
+    "verdict": "PARTIAL",
+    "probe": "Resolved every citation/link/identifier the system generates; found where a user acts on unverified output.",
+    "evidence": [
+      "The system generates no citations/links to users. Only schema-bounded action/confidence drive trades; the free-text 'reason' is displayed but never acted upon.",
+      "Impact of a fabricated reason is bounded by schema validation + dry-run default + the trading cap."
+    ],
+    "note": "No citation surface; fabrication is contained (the reason text cannot cause a bad trade).",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control": null,
+    "standing_control_plan": null
+  },
+  {
+    "id": "C-39",
+    "title": "Lifecycle process and vocabulary standards",
+    "priority": 4,
+    "band": "ASSESS",
+    "verdict": "NOT-APPLICABLE",
+    "probe": "Checked lifecycle/vocabulary-standard alignment (only material if an AMS is claimed).",
+    "evidence": [
+      "No AI management system is claimed (C-13 N/A)."
+    ],
+    "note": "",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control": null,
+    "standing_control_plan": null,
+    "na_justification": "C-39 is material only where an AI management system is claimed. None is (C-13 N/A), so there is no lifecycle/terminology alignment claim to substantiate."
+  },
+  {
+    "id": "C-40",
+    "title": "Societal and environmental impact",
+    "priority": 3,
+    "band": "ASSESS",
+    "verdict": "NOT-APPLICABLE",
+    "probe": "Assessed material societal/environmental impact.",
+    "evidence": [
+      "A few hosted-API calls per cycle for one user; no training, no high-QPS inference; no societal decision surface affecting people."
+    ],
+    "note": "",
+    "structural_fix": false,
+    "door": null,
+    "conditional_escalation": null,
+    "standing_control": null,
+    "standing_control_plan": null,
+    "na_justification": "Societal/environmental impact is a gate only where material. This is a single-user bot making a handful of API calls every several minutes, with no decisions about people and an immaterial energy footprint. Documented as immaterial rather than assigned an invented number."
+  }
+]

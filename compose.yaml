@@ -1,0 +1,43 @@
+# Alternative to deploy.sh for podman-compose / `podman compose` / docker compose:
+#   podman compose up -d --build
+#
+# Caveats vs deploy.sh:
+#   - Boot persistence is NOT set up for you. Under rootless podman,
+#     `restart: always` only takes effect at boot when podman-restart.service
+#     is enabled:  systemctl --user enable --now podman-restart.service
+#                  loginctl enable-linger "$USER"
+#   - The Dockerfile HEALTHCHECK is dropped by OCI-format builds, so the
+#     healthcheck is declared here at the compose level instead.
+services:
+  trading-automator:
+    build: .
+    image: localhost/trading-automator:latest
+    container_name: trading-automator
+    restart: always
+    ports:
+      # The API has no authentication -- keep it on loopback, or front it
+      # with an authenticated reverse proxy before exposing it.
+      - "127.0.0.1:8000:8000"
+    environment:
+      AUTOSTART: "true"
+      # Pin the in-container binding so a bare-metal .env cannot break the
+      # port mapping above.
+      WEB_HOST: 0.0.0.0
+      WEB_PORT: "8000"
+      # The app's bind-guard (C-01) refuses 0.0.0.0 without an API token; safe
+      # here because the port is published only on 127.0.0.1 above. Set a
+      # web.auth_token and remove this if you expose the port beyond loopback.
+      ALLOW_INSECURE_BIND: "true"
+    # Bootstrap configuration from a .env file (optional; values saved in the
+    # web UI take precedence and are persisted in ./config/config.json):
+    # env_file: .env
+    volumes:
+      - ./config:/app/config:Z
+      - ./artifacts:/app/artifacts:Z
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request as u; u.build_opener(u.ProxyHandler({})).open('http://127.0.0.1:8000/api/health', timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3

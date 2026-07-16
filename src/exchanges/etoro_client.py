@@ -164,30 +164,52 @@ class EToroClient(ExchangeClient):
         return self._request("POST", "/API/User/V1/Positions", json_body=payload)
 
     def _close_positions(self, asset, units_to_close):
-        """Close positions of ``asset`` until ~units_to_close units are freed."""
+        """Free ~units_to_close units of ``asset`` by closing whole positions.
+
+        eToro's API can only close entire positions, so the request is
+        approximated: positions are closed smallest-first to minimise
+        overshoot, and any significant overshoot is bought back immediately
+        so the net position change tracks the requested amount.
+        """
         portfolio = self._request("GET", "/API/User/V1/Portfolio")
         positions = portfolio.get("Positions", portfolio.get("positions", []) or [])
         target_id = self._instrument_id(asset)
-        results, remaining = [], units_to_close
+
+        matching = []
         for pos in positions:
-            if remaining <= 0:
-                break
             iid = pos.get("InstrumentID") or pos.get("InstrumentId")
             if iid != target_id:
                 continue
-            pos_id = pos.get("PositionID") or pos.get("PositionId")
             units = float(pos.get("Units", pos.get("units", 0)) or 0)
+            pos_id = pos.get("PositionID") or pos.get("PositionId")
+            matching.append((units, pos_id))
+        if not matching:
+            raise ExchangeError(f"eToro: no open positions in {asset} to close")
+        matching.sort()  # smallest first -> minimal overshoot
+
+        results, closed = [], 0.0
+        for units, pos_id in matching:
+            if closed >= units_to_close:
+                break
             if self.dry_run:
                 log.info("[DRY RUN] eToro close position %s (%s units %s)",
-                         pos_id, min(units, remaining), asset)
+                         pos_id, units, asset)
                 results.append({"dry_run": True, "position": pos_id})
             else:
                 results.append(self._request(
                     "DELETE", f"/API/User/V1/Positions/{pos_id}"
                 ))
-            remaining -= units
-        if not results:
-            raise ExchangeError(f"eToro: no open positions in {asset} to close")
+            closed += units
+
+        # Buy back a material overshoot (whole-position granularity).
+        excess = closed - units_to_close
+        if excess > 0:
+            excess_value = excess * self.get_price(asset)
+            if excess_value >= 10.0:
+                log.info("eToro: closed %.6f units over target, re-buying "
+                         "%.2f %s worth of %s", excess, excess_value,
+                         self.quote_asset, asset)
+                results.append(self._open_position(asset, excess_value))
         return results
 
     def swap(self, from_asset, to_asset, amount):

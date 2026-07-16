@@ -1,0 +1,20 @@
+{
+  "note": "C-06/C-08 capability inventory. The lethal-trifecta rule (C-08): no session may hold all three of {untrusted-input, private-data, external-communication}. Checked mechanically by tests/test_security_invariants.py on every gate run. Adding a capability that completes the triangle fails the build.",
+  "legs": ["untrusted-input", "private-data", "external-communication"],
+  "sessions": [
+    {
+      "name": "llm-advisor",
+      "component": "src/llm.py + src/prompts.py",
+      "legs": ["untrusted-input"],
+      "tools": [],
+      "rationale": "Receives TradingView indicators + pairwise summaries (treat as untrusted). Returns schema-validated JSON only. Has NO tools, NO outbound channel of its own, and never handles credentials. It cannot act, send, or exfiltrate."
+    },
+    {
+      "name": "trade-engine",
+      "component": "src/engine.py + src/exchanges/*",
+      "legs": ["private-data", "external-communication"],
+      "tools": ["exchange.swap (capped at _swap)", "exchange.repay", "sms.send"],
+      "rationale": "Holds the operator's keys (private-data) and reaches the exchange/SMS (external-communication). It acts ONLY on schema-validated LLM output through the capped _swap chokepoint; there is no path by which untrusted text becomes an instruction here. The [untrusted-input] leg is absent."
+    }
+  ]
+}

@@ -1,8 +1,7 @@
 """Common exchange abstraction.
 
 Everything the trading engine needs from an exchange is expressed here, so
-Binance and eToro (and future exchanges) are interchangeable. This replaces
-the old Selenium page-scraping layer (login, captcha solving, DOM parsing).
+Binance and eToro (and future exchanges) are interchangeable.
 """
 
 from abc import ABC, abstractmethod
@@ -15,14 +14,11 @@ class ExchangeError(RuntimeError):
 
 @dataclass
 class Balance:
-    """One asset position, valued in the quote asset.
-
-    Mirrors the old Nexo dashboard row: amount_nativ / amount_fiat / percentage.
-    """
+    """One asset position, valued in the quote asset."""
 
     asset: str
-    amount: float                 # native units (was amount_nativ)
-    quote_value: float            # value in quote asset (was amount_fiat)
+    amount: float                 # native units
+    quote_value: float            # value in the quote asset
     percentage: float = 0.0      # share of total portfolio value
 
     def to_dict(self):
@@ -55,8 +51,7 @@ class SwapResult:
 
 
 def add_percentages(balances):
-    """Fill in the portfolio share of each balance (was
-    add_native_amount_percentages)."""
+    """Fill in the portfolio share of each balance."""
     total = sum(b.quote_value for b in balances)
     for b in balances:
         b.percentage = (b.quote_value / total * 100.0) if total else 0.0
@@ -95,11 +90,10 @@ class ExchangeClient(ABC):
     def swap(self, from_asset, to_asset, amount):
         """Convert ``amount`` native units of from_asset into to_asset.
 
-        Replaces the old Nexo swap page automation. Returns SwapResult.
-        Implementations must honour ``self.dry_run``.
+        Returns SwapResult. Implementations must honour ``self.dry_run``.
         """
 
-    # -- credit (optional; was the Nexo loan) -------------------------------
+    # -- credit (optional) --------------------------------------------------
 
     def get_loan_balance(self):
         """Outstanding borrowed amount in quote asset. 0.0 when unsupported."""

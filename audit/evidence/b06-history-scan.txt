@@ -1,0 +1,52 @@
+# B-06 full git-history secret scan — evidence
+# commit under audit: 840e4f446409bca09d470e1d34a72181030f68b6
+# generated during Phase 0 (read-only)
+
+## commits in history
+840e4f4 Remove all references to the prior project
+a181fe7 Add Copy-all button for the activity log; fix config layering
+c404304 Add one-liner podman deployment; harden engine after full review
+6274f90 Rebuild trading automator on Binance/eToro APIs with web UI
+
+## distinct paths ever tracked
+.env.example
+.gitignore
+Dockerfile
+README.md
+compose.yaml
+deploy.sh
+requirements-dev.txt
+requirements.txt
+src/__init__.py
+src/analysis.py
+src/cache.py
+src/engine.py
+src/exchanges/__init__.py
+src/exchanges/base.py
+src/exchanges/binance_client.py
+src/exchanges/etoro_client.py
+src/llm.py
+src/main.py
+src/notifications.py
+src/prompts.py
+src/scheduler.py
+src/settings.py
+src/state.py
+src/web/__init__.py
+src/web/app.py
+src/web/static/index.html
+tests/conftest.py
+tests/test_engine.py
+tests/test_llm_and_exchange.py
+tests/test_settings.py
+tests/test_web.py
+
+## content grep across ALL history for known-exposed + generic secret patterns
+## pattern: sk-[A-Za-z0-9]{20} | sk-ant- | xoxb- | AKIA[0-9A-Z]{16} | -----BEGIN | TOTP_SECRET | Ejkfd8 | J6OTTFTE | api_secret= | password=
+RESULT: no matches across all history — clean
+
+## config.json on disk?
+total 8
+drwxr-xr-x  2 root root 4096 Jul 11 21:53 .
+drwxr-xr-x 12 root root 4096 Jul 16 04:45 ..
+config.json ABSENT

@@ -1,4 +1,4 @@
-"""SMS alerts via sipgate (was send_sms_alert in utils.py).
+"""SMS alerts via sipgate.
 
 Credentials come from settings; alerts are skipped silently when disabled or
 unconfigured, and are never sent from dry-run mode.

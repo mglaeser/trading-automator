@@ -1,8 +1,13 @@
-"""LLM evaluation client (was llm.py).
+"""LLM evaluation client.
 
-Primary provider is Anthropic; on failure it falls back to OpenAI for
-30 minutes before retrying the primary. Clients are created lazily from the
-current settings, so keys entered in the web UI take effect without restart.
+Primary provider is Anthropic; when it fails AND the OpenAI fallback
+succeeds, the client stays on OpenAI for 30 minutes before retrying the
+primary. Clients are created lazily from the current settings, so keys
+entered in the web UI take effect without restart.
+
+Every LLM response is schema-validated before it can influence a trade;
+malformed responses become explicit ``{"error": ...}`` results which the
+engine treats as "no signal".
 """
 
 import json
@@ -18,10 +23,21 @@ log = logging.getLogger(__name__)
 SYSTEM_PROMPT = "You are a crypto finance expert responding in JSON."
 FALLBACK_COOLDOWN = 1800  # seconds on the fallback provider after a failure
 
+VALID_ACTIONS = ("sell_buy", "buy", "sell", "hold")
+VALID_SENTIMENTS = ("bullish", "bearish", "neutral")
+
 
 def _parse_json(text):
-    text = re.sub(r"```json\s*|\s*```", "", text).strip()
-    return json.loads(text)
+    """Extract a JSON object from an LLM response, tolerating code fences
+    and surrounding prose."""
+    text = re.sub(r"```(?:json)?", "", text, flags=re.IGNORECASE).strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", text, re.DOTALL)
+        if match:
+            return json.loads(match.group(0))
+        raise
 
 
 class LLMClient:
@@ -73,45 +89,83 @@ class LLMClient:
         if self.current_provider == "anthropic":
             try:
                 return self._anthropic_completion(prompt)
-            except Exception as exc:
-                log.warning("Anthropic request failed (%s), falling back to OpenAI", exc)
+            except Exception as primary_exc:  # noqa: BLE001 -- any primary error triggers the fallback
+                log.warning("Anthropic request failed (%s), trying OpenAI",
+                            primary_exc)
+                try:
+                    result = self._openai_completion(prompt)
+                except Exception as fallback_exc:
+                    # Don't enter the cooldown when the fallback is unusable
+                    # (e.g. no OpenAI key) -- keep retrying the primary and
+                    # surface both errors.
+                    raise RuntimeError(
+                        f"Anthropic failed ({primary_exc}); "
+                        f"OpenAI fallback failed ({fallback_exc})"
+                    ) from fallback_exc
                 self._last_primary_failure = time.time()
+                return result
         return self._openai_completion(prompt)
 
     # -- high-level evaluations ------------------------------------------------
 
     def crypto_swap_evaluation(self, asset_a, asset_b, analysis, preferred,
-                               use_cache=False):
+                               use_cache=False, cache_max_age=1800):
         prompt = swap_analysis_prompt(asset_a, asset_b, preferred, analysis)
         try:
             raw = cached_response(
                 f"{asset_a}_{asset_b}_swap_eval",
                 lambda: self.create_completion(prompt),
                 enabled=use_cache,
+                max_age=cache_max_age,
             )
-            result = _parse_json(raw)
+            parsed = _parse_json(raw)
+
+            # Strict schema validation: anything off becomes a no-signal error.
+            action = parsed.get("action")
+            assets = parsed.get("assets")
+            if action not in VALID_ACTIONS:
+                raise ValueError(f"invalid action {action!r}")
+            if (not isinstance(assets, list) or len(assets) != 2
+                    or set(assets) != {asset_a, asset_b}):
+                raise ValueError(f"invalid assets {assets!r}")
+            confidence = min(1.0, max(0.0, float(parsed.get("confidence", 0.0))))
+            result = {
+                "action": action,
+                "assets": [str(a) for a in assets],
+                "reason": str(parsed.get("reason", "")),
+                "confidence": confidence,
+            }
             log.info("%s evaluated %s/%s: %s (%.2f)", self.current_provider,
-                     asset_a, asset_b, result["action"], result["confidence"])
+                     asset_a, asset_b, action, confidence)
             return result
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 -- any error becomes a logged no-signal result
             log.error("crypto_swap_evaluation failed for %s/%s: %s",
                       asset_a, asset_b, exc)
             return {"error": str(exc), "assets": [asset_a, asset_b]}
 
-    def market_evaluation(self, statements, buyable_crypto, use_cache=False):
+    def market_evaluation(self, statements, buyable_crypto, use_cache=False,
+                          cache_max_age=1800):
         prompt = market_evaluation_prompt("".join(statements), buyable_crypto)
         try:
             raw = cached_response(
                 "market_evaluation",
                 lambda: self.create_completion(prompt),
                 enabled=use_cache,
+                max_age=cache_max_age,
             )
-            result = _parse_json(raw)
-            if not isinstance(result, dict) or "recommendation" not in result:
-                raise ValueError(f"Unexpected result format: {result}")
-            log.info("Market evaluation: %s -- %s",
-                     result["recommendation"], result.get("reason"))
+            parsed = _parse_json(raw)
+            if not isinstance(parsed, dict):
+                raise ValueError(f"unexpected result format: {parsed!r}")
+            sentiment = str(parsed.get("recommendation", "")).strip().lower()
+            if sentiment not in VALID_SENTIMENTS:
+                raise ValueError(f"invalid sentiment {sentiment!r}")
+            result = {
+                "recommendation": sentiment,
+                "reason": str(parsed.get("reason", "")),
+                "bullish_crypto": str(parsed.get("bullish_crypto", "none")),
+            }
+            log.info("Market evaluation: %s -- %s", sentiment, result["reason"])
             return result
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 -- any error becomes a logged no-signal result
             log.error("market_evaluation failed: %s", exc)
             return {"error": str(exc)}

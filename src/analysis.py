@@ -1,8 +1,8 @@
-"""Technical analysis via TradingView (was crypto_exchnage.py).
+"""Technical analysis via TradingView.
 
-Fetches indicators for every configured asset, derives the same refined
-metrics as before (momentum, volatility, trend strength, Fibonacci levels)
-and a simple rule-based recommendation that feeds the LLM evaluation.
+Fetches indicators for every configured asset, derives refined metrics
+(momentum, volatility, trend strength, Fibonacci levels) and a simple
+rule-based recommendation that feeds the LLM evaluation.
 """
 
 import logging
@@ -84,11 +84,13 @@ def _refine(indicators, symbol, screener_exchange, interval):
     return refined
 
 
-def get_crypto_analysis(assets, interval="30m", use_cache=False):
+def get_crypto_analysis(assets, interval="30m", use_cache=False,
+                        cache_max_age=1800):
     """Analyse every asset in the configured universe.
 
     ``assets`` is the settings dict: {ticker: {symbol, screener_exchange, ...}}.
-    Returns {ticker: refined_analysis}.
+    Returns {ticker: refined_analysis}; failed tickers are omitted (the
+    engine refuses to trade when any buyable asset is missing).
     """
     results = {}
     for ticker, details in assets.items():
@@ -103,12 +105,13 @@ def get_crypto_analysis(assets, interval="30m", use_cache=False):
                 f"{details['symbol']}_analysis",
                 lambda h=handler: h.get_analysis().indicators,
                 enabled=use_cache,
+                max_age=cache_max_age,
             )
             results[ticker] = _refine(
                 analysis, details["symbol"], details["screener_exchange"], interval
             )
             log.info("Refined analysis for %s completed", ticker)
-        except Exception as exc:  # one bad ticker must not kill the run
+        except Exception as exc:  # noqa: BLE001 -- one bad ticker must not kill the run (logged)
             log.warning("Error analysing %s: %s", ticker, exc)
     return results
 
@@ -132,13 +135,16 @@ def generate_swap_summaries(recommendations):
     return summaries
 
 
-def evaluate_crypto_analysis(analytics, assets, llm_client):
+def evaluate_crypto_analysis(analytics, assets, llm_client, use_cache=False,
+                            cache_max_age=1800):
     """Pairwise LLM comparison of all crypto assets (upper triangle)."""
     recommendations = []
     tickers = [t for t in assets if t in analytics]
     for i, asset_a in enumerate(tickers):
         for asset_b in tickers[i + 1:]:
-            if not (assets[asset_a].get("crypto") and assets[asset_b].get("crypto")):
+            # missing "crypto" defaults to True, consistent with get_buyable_cryptos
+            if not (assets[asset_a].get("crypto", True)
+                    and assets[asset_b].get("crypto", True)):
                 continue
 
             a_pref = assets[asset_a].get("preferred", False)
@@ -149,7 +155,8 @@ def evaluate_crypto_analysis(analytics, assets, llm_client):
 
             log.info("Comparing %s vs %s", asset_a, asset_b)
             result = llm_client.crypto_swap_evaluation(
-                asset_a, asset_b, analytics, preferred
+                asset_a, asset_b, analytics, preferred,
+                use_cache=use_cache, cache_max_age=cache_max_age,
             )
             recommendations.append(result)
     return recommendations, generate_swap_summaries(recommendations)

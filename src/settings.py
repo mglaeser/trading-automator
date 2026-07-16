@@ -1,10 +1,22 @@
 """Central configuration store.
 
-Configuration lives in ``config/config.json`` (gitignored) and can be edited
-through the web UI. Environment variables override file values on startup so
-the app also works fully headless / containerised.
+Effective configuration is composed from three layers (later wins):
 
-Secrets are never returned to the UI in clear text -- they are masked and a
+  defaults  <  environment variables  <  config file (UI-saved values)
+
+The config file (``config/config.json``, gitignored) is an *overlay*: it
+contains only the keys the user actually changed through the web UI (or via
+``update()``), never env-derived or default values. Consequences:
+
+  - A stale ``.env`` can never silently revert a decision made in the UI
+    (e.g. flip dry-run back off after a container restart) -- the UI-saved
+    value sits in a higher layer.
+  - Env vars keep working across restarts for everything the UI never
+    touched (they are not frozen into the file by unrelated saves).
+  - Secrets supplied via env are not written to disk unless the user
+    re-enters them in the UI.
+
+Secrets are never returned to the UI in clear text -- they are masked, and a
 masked value sent back by the UI is ignored on save.
 """
 
@@ -31,11 +43,22 @@ SECRET_PATHS = {
     "llm.anthropic_api_key",
     "llm.openai_api_key",
     "sms.auth_token",
+    "web.auth_token",
 }
+
+# Subtrees that are replaced wholesale instead of deep-merged: the UI always
+# submits the complete document for these, and a merge would make it
+# impossible to ever delete an entry (e.g. remove an asset from the universe).
+REPLACE_PATHS = {"trading.assets"}
 
 DEFAULTS = {
     "exchange": "binance",  # binance | etoro
     "dry_run": True,
+    "runtime": {
+        # Persisted engine switch: an explicit stop in the UI survives
+        # container restarts; AUTOSTART only applies while this is true.
+        "engine_enabled": True,
+    },
     "binance": {
         "api_key": "",
         "api_secret": "",
@@ -60,16 +83,20 @@ DEFAULTS = {
     },
     "trading": {
         # Quote/stable asset used as the intermediate for all swaps and as the
-        # "cash" position (was USDT on Nexo).
+        # "cash" position.
         "quote_asset": "USDT",
-        # Anchor asset target: generalisation of the old NEXO loyalty level --
-        # keep this asset at a fixed share of the portfolio.
+        # Anchor asset target: keep this asset at a fixed share of the
+        # portfolio. Adjustments are clamped to [anchor_swap_min,
+        # anchor_swap_max] per cycle, so large deviations converge
+        # incrementally instead of moving big amounts.
         "anchor_asset": "BNB",
         "anchor_target_percent": 10.3,
         "anchor_swap_min": 2.5,
         "anchor_swap_max": 15.0,
-        # Fiat-inflow split (was handle_euro_balance): when the quote balance
-        # is inside this window, split part of it into the anchor asset.
+        # Fiat-inflow split: when the quote balance GREW by an amount inside
+        # this window since the end of the previous rebalance cycle, a slice
+        # of the inflow buys the anchor asset. Only the delta counts -- a
+        # standing cash reserve never triggers it.
         "inflow_min": 300.0,
         "inflow_max": 750.0,
         "inflow_anchor_ratio": 0.103,
@@ -78,18 +105,34 @@ DEFAULTS = {
         "rebalance_delta": 0.05,      # only act when allocation is off by more than this
         "min_trade_value": 10.0,      # skip trades below this quote value
         "dust_threshold": 10.0,       # sweep balances below this quote value
+        # Blast-radius cap on the irreversible money-moving capability. A single
+        # swap worth more than max_swap_value is clamped down; when a swap would
+        # push the rolling 24h traded quote value over daily_trade_cap the swap is
+        # refused and the engine auto-halts (latches off until Start is pressed).
+        # Set either to 0 to disable it. Raise them deliberately once you trust
+        # the behaviour -- the defaults are intentionally conservative.
+        "max_swap_value": 1000.0,
+        "daily_trade_cap": 5000.0,
         "analysis_interval": "30m",
-        # Universe of tradeable assets (mirrors the old crypto_dict).
+        # How long cached TA/LLM responses stay valid in dry-run (seconds).
+        "cache_max_age": 1800,
+        # Universe of tradeable assets.
         # "symbol"/"screener_exchange" feed TradingView TA; "crypto" marks
         # assets that get sold in a bearish market; "preferred" biases the
-        # pairwise LLM comparison.
+        # pairwise LLM comparison. Assets NOT listed here are never touched.
         "assets": {
-            "BTC":  {"symbol": "BTCUSD",  "screener_exchange": "BINANCE", "preferred": False, "crypto": True},
-            "ETH":  {"symbol": "ETHUSD",  "screener_exchange": "BINANCE", "preferred": False, "crypto": True},
-            "PAXG": {"symbol": "PAXGUSD", "screener_exchange": "BINANCE", "preferred": True,  "crypto": True},
-            "BNB":  {"symbol": "BNBUSD",  "screener_exchange": "BINANCE", "preferred": True,  "crypto": True},
-            "AAVE": {"symbol": "AAVEUSD", "screener_exchange": "BINANCE", "preferred": True,  "crypto": True},
-            "USDT": {"symbol": "USDTEUR", "screener_exchange": "COINBASE", "preferred": True, "crypto": False},
+            "BTC":  {"symbol": "BTCUSD",  "screener_exchange": "BINANCE",
+                     "preferred": False, "crypto": True},
+            "ETH":  {"symbol": "ETHUSD",  "screener_exchange": "BINANCE",
+                     "preferred": False, "crypto": True},
+            "PAXG": {"symbol": "PAXGUSD", "screener_exchange": "BINANCE",
+                     "preferred": True,  "crypto": True},
+            "BNB":  {"symbol": "BNBUSD",  "screener_exchange": "BINANCE",
+                     "preferred": True,  "crypto": True},
+            "AAVE": {"symbol": "AAVEUSD", "screener_exchange": "BINANCE",
+                     "preferred": True,  "crypto": True},
+            "USDT": {"symbol": "USDTEUR", "screener_exchange": "COINBASE",
+                     "preferred": True,  "crypto": False},
         },
     },
     "schedule": {
@@ -97,7 +140,8 @@ DEFAULTS = {
         "latitude": 52.52,
         "longitude": 13.405,
         "timezone": "Europe/Berlin",
-        # Randomised intervals in minutes, [min, max] per job and period.
+        # Randomised base intervals in minutes, [min, max] per job and period.
+        # Changes apply from the next scheduling of each job.
         "daytime": {
             "refresh": [30, 45],
             "rebalance": [10, 15],
@@ -108,14 +152,27 @@ DEFAULTS = {
             "rebalance": [20, 40],
             "repay": [720, 900],
         },
+        # Sentiment-driven cadence for the rebalance job: after each market
+        # evaluation the engine overrides the base interval with these until
+        # the sentiment changes again.
+        "sentiment_rebalance": {
+            "bullish": [8, 13],
+            "bearish": [45, 75],
+            "neutral": [30, 45],
+        },
     },
     "web": {
         "host": "0.0.0.0",
         "port": 8000,
+        # Optional API token. When set, every state-changing route requires
+        # `Authorization: Bearer <token>`. REQUIRED before the UI may bind to a
+        # non-loopback address (the app refuses to start otherwise). Empty =
+        # loopback-only, no auth (the default).
+        "auth_token": "",
     },
 }
 
-# Environment variable -> dotted config path
+# Environment variable -> dotted config path (bootstrap only, see module doc)
 ENV_OVERRIDES = {
     "EXCHANGE": "exchange",
     "DRY_RUN": "dry_run",
@@ -125,11 +182,25 @@ ENV_OVERRIDES = {
     "ETORO_USER_KEY": "etoro.user_key",
     "ANTHROPIC_API_KEY": "llm.anthropic_api_key",
     "OPENAI_API_KEY": "llm.openai_api_key",
+    "SMS_ENABLED": "sms.enabled",
     "SMS_AUTH_TOKEN": "sms.auth_token",
     "SMS_RECIPIENT": "sms.recipient",
     "WEB_HOST": "web.host",
     "WEB_PORT": "web.port",
+    "WEB_AUTH_TOKEN": "web.auth_token",
 }
+
+
+def exchange_configured(settings):
+    """True when the selected exchange has credentials to work with."""
+    exchange = str(settings.get("exchange", "binance")).lower()
+    if exchange == "binance":
+        return bool(settings.get("binance.api_key")
+                    and settings.get("binance.api_secret"))
+    if exchange == "etoro":
+        return bool(settings.get("etoro.api_key")
+                    and settings.get("etoro.user_key"))
+    return False
 
 
 def _get_path(data, dotted):
@@ -149,17 +220,24 @@ def _set_path(data, dotted, value):
     node[parts[-1]] = value
 
 
-def _deep_merge(base, override):
+def _deep_merge(base, override, prefix=""):
+    """Merge ``override`` into ``base``; REPLACE_PATHS subtrees are swapped
+    wholesale so entries can actually be deleted through the UI."""
     for key, value in override.items():
-        if isinstance(value, dict) and isinstance(base.get(key), dict):
-            _deep_merge(base[key], value)
+        dotted = f"{prefix}{key}"
+        if (dotted not in REPLACE_PATHS
+                and isinstance(value, dict) and isinstance(base.get(key), dict)):
+            _deep_merge(base[key], value, dotted + ".")
         else:
             base[key] = value
     return base
 
 
 def _coerce(value, template):
-    """Coerce an incoming value to the type of the default it replaces."""
+    """Coerce an incoming value to the shape of the default it replaces.
+
+    Raises TypeError/ValueError on values that cannot be made to fit (the
+    caller drops those keys, keeping the stored value)."""
     if isinstance(template, bool):
         if isinstance(value, str):
             return value.strip().lower() in ("1", "true", "t", "yes", "y", "on")
@@ -168,41 +246,57 @@ def _coerce(value, template):
         return int(value)
     if isinstance(template, float):
         return float(value)
+    if isinstance(template, list):
+        # e.g. schedule intervals: must be a list of numbers, same length
+        if not isinstance(value, list):
+            raise TypeError(f"expected a list, got {type(value).__name__}")
+        if template and all(isinstance(t, (int, float)) for t in template):
+            coerced = [float(v) for v in value]
+            if len(template) and len(coerced) != len(template):
+                raise ValueError(f"expected {len(template)} numbers")
+            return coerced
+        return value
     return value
 
 
 class Settings:
-    """Thread-safe configuration with JSON persistence."""
+    """Thread-safe layered configuration with JSON persistence.
+
+    ``self._overlay`` holds only user-changed values (what the file stores);
+    ``self._data`` is the composed effective view (defaults < env < overlay).
+    """
 
     def __init__(self, path=CONFIG_PATH):
         self._path = Path(path)
         self._lock = threading.RLock()
-        self._data = copy.deepcopy(DEFAULTS)
-        self._load_file()
-        self._apply_env()
+        self._overlay = self._load_file()
+        self._compose()
 
     # -- persistence ------------------------------------------------------
 
     def _load_file(self):
-        if self._path.exists():
-            try:
-                stored = json.loads(self._path.read_text())
-                _deep_merge(self._data, stored)
-            except (json.JSONDecodeError, OSError) as exc:
-                raise RuntimeError(f"Could not read {self._path}: {exc}") from exc
+        if not self._path.exists():
+            return {}
+        try:
+            return json.loads(self._path.read_text())
+        except (json.JSONDecodeError, OSError) as exc:
+            raise RuntimeError(f"Could not read {self._path}: {exc}") from exc
 
-    def _apply_env(self):
+    def _compose(self):
+        data = copy.deepcopy(DEFAULTS)
         for env_name, dotted in ENV_OVERRIDES.items():
             raw = os.getenv(env_name)
             if raw is None or raw == "":
                 continue
             template = _get_path(DEFAULTS, dotted)
-            _set_path(self._data, dotted, _coerce(raw, template))
+            _set_path(data, dotted, _coerce(raw, template))
+        _deep_merge(data, copy.deepcopy(self._overlay))
+        self._data = data
 
     def save(self):
         with self._lock:
             self._path.parent.mkdir(parents=True, exist_ok=True)
-            self._path.write_text(json.dumps(self._data, indent=2))
+            self._path.write_text(json.dumps(self._overlay, indent=2))
 
     # -- access -----------------------------------------------------------
 
@@ -227,15 +321,15 @@ class Settings:
     def update(self, incoming):
         """Deep-merge a (possibly partial) config coming from the UI.
 
-        Masked secret values are dropped so an untouched password field does
-        not overwrite the stored secret.
-        """
+        Masked secret values are dropped so an untouched password field never
+        overwrites the stored secret; values that fail type coercion are
+        dropped so the stored value survives."""
 
         def scrub(node, prefix=""):
             for key in list(node.keys()):
                 dotted = f"{prefix}{key}"
                 value = node[key]
-                if isinstance(value, dict):
+                if isinstance(value, dict) and dotted not in REPLACE_PATHS:
                     scrub(value, dotted + ".")
                 elif dotted in SECRET_PATHS and value == MASK:
                     del node[key]
@@ -250,5 +344,6 @@ class Settings:
         incoming = copy.deepcopy(incoming)
         scrub(incoming)
         with self._lock:
-            _deep_merge(self._data, incoming)
+            _deep_merge(self._overlay, incoming)
+            self._compose()
             self.save()
